@@ -10,7 +10,7 @@ from django.utils.text import slugify
 from lxml import etree
 from django.core.management.base import BaseCommand, CommandError
 
-from recipes.models import Recipe
+from recipes.models import Recipe, Category, Cuisine
 
 
 class Command(BaseCommand):
@@ -41,15 +41,30 @@ class Command(BaseCommand):
     def _ingest_recipes(self):
         recipe_file = self._validate_recipes_json_file()
         recipes = json.load(open(recipe_file))
+
         for i, recipe in enumerate(recipes['recipes']):
-            Recipe.objects.get_or_create(
+            cuisine, _ = Cuisine.objects.get_or_create(name=recipe['recipeCuisine']) if recipe['recipeCuisine'] else (None, False)
+            obj, _ = Recipe.objects.get_or_create(
                 name=recipe['name'],
                 slug=slugify(recipe['name']),
-                total_time=0,
-                rating=recipe['aggregateRating']['ratingValue'] if 'aggregateRating' in recipe else None,
+                defaults=dict(
+                    description=recipe['description'],
+                    total_time=0,  # TODO - parse "PT45M" for 45 minutes
+                    servings=recipe['recipeYield'],
+                    rating=recipe['aggregateRating']['ratingValue'] if recipe['aggregateRating'] else None,
+                    ingredients=recipe['recipeIngredient'],
+                    cuisine=cuisine,
+                ),
             )
+
+            # categories
+            for category in [Category.objects.get_or_create(name=category)[0] for category in recipe['recipeCategory']]:
+                obj.categories.add(category)
+            obj.save()
+
             if i != 0 and i % 100 == 0:
                 self.stdout.write(self.style.SUCCESS('Ingested {} recipes'.format(i)))
+
         # add search vector
         vector = SearchVector('name', weight='A') + SearchVector('ingredients', weight='B')
         Recipe.objects.update(search_vector=vector)
