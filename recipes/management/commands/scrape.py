@@ -4,17 +4,17 @@ import sys
 import json
 import logging
 import requests
+from lxml import etree
 from django.conf import settings
 from django.contrib.postgres.search import SearchVector
 from django.utils.text import slugify
-from lxml import etree
 from django.core.management.base import BaseCommand, CommandError
 
 from recipes.models import Recipe, Category, Cuisine
 
 
 class Command(BaseCommand):
-    help = 'Scrapes NYT recipes'
+    help = 'Scrape NYT recipes'
     pages = 422
 
     def add_arguments(self, parser):
@@ -39,28 +39,50 @@ class Command(BaseCommand):
             self._ingest_recipes()
 
     def _ingest_recipes(self):
+
+        # retrieve and validate recipe file
         recipe_file = self._validate_recipes_json_file()
         recipes = json.load(open(recipe_file))
 
+        # delete existing records
+        Recipe.objects.all().delete()
+        Category.objects.all().delete()
+        Cuisine.objects.all().delete()
+
+        # import
         for i, recipe in enumerate(recipes['recipes']):
+            # set recipe slug
+            slug = slugify(recipe['name'])
+
+            # set image path if it exists
+            rel_image_path = os.path.join('static', 'recipes', '{}.jpg'.format(slug))
+            abs_image_path = os.path.join(settings.BASE_DIR, rel_image_path)
+
+            # set cuisine
             cuisine, _ = Cuisine.objects.get_or_create(name=recipe['recipeCuisine']) if recipe['recipeCuisine'] else (None, False)
-            obj, _ = Recipe.objects.get_or_create(
+
+            # create recipe
+            recipe_obj = Recipe.objects.create(
                 name=recipe['name'],
-                slug=slugify(recipe['name']),
-                defaults=dict(
-                    description=recipe['description'],
-                    total_time=0,  # TODO - parse "PT45M" for 45 minutes
-                    servings=recipe['recipeYield'],
-                    rating=recipe['aggregateRating']['ratingValue'] if recipe['aggregateRating'] else None,
-                    ingredients=recipe['recipeIngredient'],
-                    cuisine=cuisine,
-                ),
+                slug=slug,
+                image_path=rel_image_path if os.path.exists(abs_image_path) else None,
+                description=recipe['description'],
+                total_time=0,  # TODO - parse "PT45M" for 45 minutes
+                servings=recipe['recipeYield'],
+                rating=recipe['aggregateRating']['ratingValue'] if recipe['aggregateRating'] else None,
+                ingredients=recipe['recipeIngredient'],
+                instructions=[x['text'] for x in recipe['recipeInstructions']],
+                cuisine=cuisine,
             )
 
-            # categories
-            for category in [Category.objects.get_or_create(name=category)[0] for category in recipe['recipeCategory']]:
-                obj.categories.add(category)
-            obj.save()
+            # assign categories (they're csv strings)
+            categories = recipe['recipeCategory'].split(',')
+            for category in categories:
+                if not category:
+                    continue
+                cat_obj, _ = Category.objects.get_or_create(name=category)
+                recipe_obj.categories.add(cat_obj)
+                recipe_obj.save()
 
             if i != 0 and i % 100 == 0:
                 self.stdout.write(self.style.SUCCESS('Ingested {} recipes'.format(i)))
@@ -84,7 +106,7 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.ERROR('Could not download image {} for {}'.format(recipe['image'], recipe['name'])))
                 continue
             image_name = '{}.jpg'.format(slugify(recipe['name']))
-            with open(os.path.join('recipes/static/recipe-images', image_name), 'wb') as out_file:
+            with open(os.path.join('static/recipes', image_name), 'wb') as out_file:
                 shutil.copyfileobj(response.raw, out_file)
             if i != 0 and i % 100 == 0:
                 self.stdout.write(self.style.SUCCESS('Downloaded {} images'.format(i)))
