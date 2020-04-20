@@ -71,7 +71,7 @@ class Command(BaseCommand):
                 servings=recipe['recipeYield'],
                 rating=recipe['aggregateRating']['ratingValue'] if recipe['aggregateRating'] else None,
                 ingredients=recipe['recipeIngredient'],
-                instructions=[x['text'] for x in recipe['recipeInstructions']],
+                instructions=[x['text'] for x in recipe['recipeInstructions'] or []],
                 cuisine=cuisine,
             )
 
