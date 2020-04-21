@@ -44,11 +44,6 @@ class Command(BaseCommand):
         recipe_file = self._validate_recipes_json_file()
         recipes = json.load(open(recipe_file))
 
-        # delete existing records
-        Recipe.objects.all().delete()
-        Category.objects.all().delete()
-        Cuisine.objects.all().delete()
-
         # import
         for i, recipe in enumerate(recipes['recipes']):
 
@@ -57,19 +52,21 @@ class Command(BaseCommand):
             abs_image_path = os.path.join(settings.BASE_DIR, rel_image_path)
 
             # create recipe
-            recipe_obj = Recipe.objects.create(
-                name=recipe['name'],
+            recipe_obj, _ = Recipe.objects.get_or_create(
                 slug=recipe['slug'],
-                image_path=rel_image_path if os.path.exists(abs_image_path) else None,
-                description=recipe['description'],
-                # parse duration like "PT45M" to 45 minutes
-                total_time=parse_duration(recipe['totalTime']).seconds / 60 if 'totalTime' in recipe else None,
-                servings=recipe['recipeYield'],
-                rating_value=recipe['aggregateRating']['ratingValue'] if recipe['aggregateRating'] else None,
-                rating_count=recipe['aggregateRating']['ratingCount'] if recipe['aggregateRating'] else None,
-                ingredients=recipe['recipeIngredient'],
-                instructions=[x['text'] for x in recipe['recipeInstructions'] or [] if 'text' in x],
-                author=recipe['author']['name'],
+                defaults=dict(
+                    name=recipe['name'],
+                    image_path=rel_image_path if os.path.exists(abs_image_path) else None,
+                    description=recipe['description'],
+                    # parse duration like "PT45M" to 45 minutes
+                    total_time=parse_duration(recipe['totalTime']).seconds / 60 if 'totalTime' in recipe else None,
+                    servings=recipe['recipeYield'],
+                    rating_value=recipe['aggregateRating']['ratingValue'] if recipe['aggregateRating'] else None,
+                    rating_count=recipe['aggregateRating']['ratingCount'] if recipe['aggregateRating'] else None,
+                    ingredients=recipe['recipeIngredient'],
+                    instructions=[x['text'] for x in recipe['recipeInstructions'] or [] if 'text' in x],
+                    author=recipe['author']['name'],
+                )
             )
 
             # assign categories (they're csv strings)

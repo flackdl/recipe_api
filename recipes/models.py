@@ -7,7 +7,6 @@ from django.db.models import Index
 
 class Recipe(models.Model):
     name = models.CharField(max_length=500)
-    # TODO - pointless if not unique (use their slug vs generating one and can link correctly)
     slug = models.SlugField(max_length=200, unique=True)
     image_path = models.CharField(max_length=210, null=True, blank=True)
     description = models.TextField()
