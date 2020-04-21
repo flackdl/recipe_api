@@ -8,7 +8,6 @@ from django.utils.dateparse import parse_duration
 from lxml import etree
 from django.conf import settings
 from django.contrib.postgres.search import SearchVector
-from django.utils.text import slugify
 from django.core.management.base import BaseCommand, CommandError
 
 from recipes.models import Recipe, Category, Cuisine
@@ -52,17 +51,15 @@ class Command(BaseCommand):
 
         # import
         for i, recipe in enumerate(recipes['recipes']):
-            # set recipe slug
-            slug = slugify(recipe['name'])
 
             # set image path if it exists
-            rel_image_path = os.path.join('static', 'recipes', '{}.jpg'.format(slug))
+            rel_image_path = os.path.join('static', 'recipes', '{}.jpg'.format(recipe['slug']))
             abs_image_path = os.path.join(settings.BASE_DIR, rel_image_path)
 
             # create recipe
             recipe_obj = Recipe.objects.create(
                 name=recipe['name'],
-                slug=slug,
+                slug=recipe['slug'],
                 image_path=rel_image_path if os.path.exists(abs_image_path) else None,
                 description=recipe['description'],
                 # parse duration like "PT45M" to 45 minutes
@@ -113,7 +110,8 @@ class Command(BaseCommand):
                 logging.exception(e)
                 self.stdout.write(self.style.ERROR('Could not download image {} for {}'.format(recipe['image'], recipe['name'])))
                 continue
-            image_name = '{}.jpg'.format(slugify(recipe['name']))
+            # TODO - extract actual image extension and don't assume jpg
+            image_name = '{}.jpg'.format(recipe['slug'])
             with open(os.path.join('static/recipes', image_name), 'wb') as out_file:
                 shutil.copyfileobj(response.raw, out_file)
             if i != 0 and i % 100 == 0:
@@ -133,22 +131,48 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS('Scraping recipes'))
 
         recipes = []
+        using_cached = 0
 
         for i, url in enumerate(json.load(open(urls_file, 'r'))['urls']):
 
-            response = requests.get('https://cooking.nytimes.com{url}'.format(url=url))
+            cache_path = os.path.join('/tmp/recipes/', os.path.basename(url))
+
+            # use cache if it exists
+            if os.path.exists(cache_path):
+                content = open(cache_path, 'r').read()
+                if using_cached != 0 and using_cached % 100 == 0:
+                    logging.warning('Used {} cached pages'.format(using_cached))
+            # scrape url
+            else:
+                try:
+                    response = requests.get('https://cooking.nytimes.com{url}'.format(url=url))
+                except Exception as e:
+                    logging.exception(e)
+                    logging.warning('ERROR scraping url {}'.format(url))
+                    continue
+                content = response.content.decode()
+                # store cached version
+                with open(cache_path, 'w') as fp:
+                    fp.write(content)
+
+            # parse recipe content
             try:
-                html = etree.HTML(response.content.decode())
+                html = etree.HTML(content)
                 recipe_json = html.xpath('//script[@type="application/ld+json"]')[0]
             except Exception as e:
-                logging.warning('ERROR parsing #{} of url {}'.format(i, url))
+                logging.warning('ERROR parsing {}'.format(url))
                 logging.exception(e)
                 continue
 
             if i != 0 and i % 100 == 0:
                 self.stdout.write(self.style.SUCCESS('Scraped {} recipes'.format(i)))
 
-            recipes.append(json.loads(recipe_json.text))
+            recipe_data = json.loads(recipe_json.text)
+
+            # include their slug
+            recipe_data['slug'] = os.path.basename(url)
+
+            recipes.append(recipe_data)
 
         json.dump({'recipes': recipes}, open('recipes.json', 'w'), ensure_ascii=False)
         self.stdout.write(self.style.SUCCESS('Complete'))
