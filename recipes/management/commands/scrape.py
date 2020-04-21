@@ -130,7 +130,7 @@ class Command(BaseCommand):
 
             response = requests.get('https://cooking.nytimes.com{url}'.format(url=url))
             try:
-                html = etree.HTML(response.content)
+                html = etree.HTML(response.content.decode())
                 recipe_json = html.xpath('//script[@type="application/ld+json"]')[0]
             except Exception as e:
                 logging.warning('ERROR parsing #{} of url {}'.format(i, url))
