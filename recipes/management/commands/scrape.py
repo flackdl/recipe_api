@@ -65,7 +65,8 @@ class Command(BaseCommand):
                 # parse duration like "PT45M" to 45 minutes
                 total_time=parse_duration(recipe['totalTime']).seconds / 60 if 'totalTime' in recipe else None,
                 servings=recipe['recipeYield'],
-                rating=recipe['aggregateRating']['ratingValue'] if recipe['aggregateRating'] else None,
+                rating_value=recipe['aggregateRating']['ratingValue'] if recipe['aggregateRating'] else None,
+                rating_count=recipe['aggregateRating']['ratingCount'] if recipe['aggregateRating'] else None,
                 ingredients=recipe['recipeIngredient'],
                 instructions=[x['text'] for x in recipe['recipeInstructions'] or [] if 'text' in x],
                 author=recipe['author']['name'],
