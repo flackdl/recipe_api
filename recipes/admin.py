@@ -14,7 +14,7 @@ class CategoryAdmin(admin.ModelAdmin):
 
 @admin.register(Cuisine)
 class CuisineAdmin(admin.ModelAdmin):
-    inlines = (RecipeInlineAdmin,)
+    pass
 
 
 @admin.register(Recipe)
