@@ -10,13 +10,14 @@ class Recipe(models.Model):
     slug = models.SlugField(max_length=200)
     image_path = models.CharField(max_length=210, null=True, blank=True)
     description = models.TextField()
-    total_time = models.IntegerField()  # minutes
+    total_time = models.IntegerField(null=True, blank=True)  # minutes
     servings = models.CharField(max_length=100)
     rating = models.IntegerField(null=True, blank=True)
     ingredients = fields.ArrayField(base_field=models.CharField(max_length=1500))
     instructions = fields.ArrayField(base_field=models.CharField(max_length=3000))
     categories = models.ManyToManyField('Category')
-    cuisine = models.ForeignKey('Cuisine', null=True, blank=True, on_delete=models.CASCADE)
+    cuisines = models.ManyToManyField('Cuisine')
+    author = models.CharField(max_length=100)
     search_vector = SearchVectorField(null=True)  # postgres search vector populated after creation
 
     class Meta:

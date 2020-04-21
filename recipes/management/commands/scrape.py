@@ -4,6 +4,7 @@ import sys
 import json
 import logging
 import requests
+from django.utils.dateparse import parse_duration
 from lxml import etree
 from django.conf import settings
 from django.contrib.postgres.search import SearchVector
@@ -58,21 +59,19 @@ class Command(BaseCommand):
             rel_image_path = os.path.join('static', 'recipes', '{}.jpg'.format(slug))
             abs_image_path = os.path.join(settings.BASE_DIR, rel_image_path)
 
-            # set cuisine
-            cuisine, _ = Cuisine.objects.get_or_create(name=recipe['recipeCuisine']) if recipe['recipeCuisine'] else (None, False)
-
             # create recipe
             recipe_obj = Recipe.objects.create(
                 name=recipe['name'],
                 slug=slug,
                 image_path=rel_image_path if os.path.exists(abs_image_path) else None,
                 description=recipe['description'],
-                total_time=0,  # TODO - parse "PT45M" for 45 minutes
+                # parse duration like "PT45M" to 45 minutes
+                total_time=parse_duration(recipe['totalTime']).seconds / 60 if 'totalTime' in recipe else None,
                 servings=recipe['recipeYield'],
                 rating=recipe['aggregateRating']['ratingValue'] if recipe['aggregateRating'] else None,
                 ingredients=recipe['recipeIngredient'],
                 instructions=[x['text'] for x in recipe['recipeInstructions'] or [] if 'text' in x],
-                cuisine=cuisine,
+                author=recipe['author']['name'],
             )
 
             # assign categories (they're csv strings)
@@ -82,6 +81,15 @@ class Command(BaseCommand):
                     continue
                 cat_obj, _ = Category.objects.get_or_create(name=category)
                 recipe_obj.categories.add(cat_obj)
+                recipe_obj.save()
+
+            # assign cuisines (they're csv strings)
+            cuisines = recipe['recipeCuisine'].split(',')
+            for cuisine in cuisines:
+                if not cuisine:
+                    continue
+                cuisine_obj, _ = Cuisine.objects.get_or_create(name=cuisine)
+                recipe_obj.cuisines.add(cuisine_obj)
                 recipe_obj.save()
 
             if i != 0 and i % 100 == 0:
@@ -142,7 +150,7 @@ class Command(BaseCommand):
 
             recipes.append(json.loads(recipe_json.text))
 
-        json.dump({'recipes': recipes}, open('recipes.json', 'w'))
+        json.dump({'recipes': recipes}, open('recipes.json', 'w'), ensure_ascii=False)
         self.stdout.write(self.style.SUCCESS('Complete'))
 
     def _scrape_urls(self):
