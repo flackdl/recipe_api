@@ -74,7 +74,7 @@ class Command(BaseCommand):
             for category in categories:
                 if not category:
                     continue
-                cat_obj, _ = Category.objects.get_or_create(name=category)
+                cat_obj, _ = Category.objects.get_or_create(name=category.strip())
                 recipe_obj.categories.add(cat_obj)
                 recipe_obj.save()
 
@@ -83,7 +83,7 @@ class Command(BaseCommand):
             for cuisine in cuisines:
                 if not cuisine:
                     continue
-                cuisine_obj, _ = Cuisine.objects.get_or_create(name=cuisine)
+                cuisine_obj, _ = Cuisine.objects.get_or_create(name=cuisine.strip())
                 recipe_obj.cuisines.add(cuisine_obj)
                 recipe_obj.save()
 
