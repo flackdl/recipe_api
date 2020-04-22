@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import sys
 import json
@@ -48,15 +49,17 @@ class Command(BaseCommand):
         for i, recipe in enumerate(recipes['recipes']):
 
             # set image path if it exists
-            rel_image_path = os.path.join('static', 'recipes', '{}.jpg'.format(recipe['slug']))
+            rel_image_path = os.path.join('/static', 'recipes', '{}.jpg'.format(recipe['slug']))
             abs_image_path = os.path.join(settings.BASE_DIR, rel_image_path)
+            empty_url = '/static/recipes/empty.png'
+            image_url = rel_image_path if os.path.exists(abs_image_path) else empty_url
 
             # create recipe
-            recipe_obj, _ = Recipe.objects.get_or_create(
+            recipe_obj, _ = Recipe.objects.update_or_create(
                 slug=recipe['slug'],
                 defaults=dict(
                     name=recipe['name'],
-                    image_path=rel_image_path if os.path.exists(abs_image_path) else None,
+                    image_path=image_url,
                     description=recipe['description'],
                     # parse duration like "PT45M" to 45 minutes
                     total_time=parse_duration(recipe['totalTime']).seconds / 60 if 'totalTime' in recipe else None,
@@ -108,8 +111,13 @@ class Command(BaseCommand):
                 logging.exception(e)
                 self.stdout.write(self.style.ERROR('Could not download image {} for {}'.format(recipe['image'], recipe['name'])))
                 continue
-            # TODO - extract actual image extension and don't assume jpg
-            image_name = '{}.jpg'.format(recipe['slug'])
+            # use image extension for new name based on slug
+            extension_match = re.match(r'.*(\.\w{3})$', os.path.basename(recipe['image']))
+            if extension_match:
+                extension = extension_match.groups()[0]
+            else:
+                extension = '.jpg'
+            image_name = '{}{}'.format(recipe['slug'], extension)
             with open(os.path.join('static/recipes', image_name), 'wb') as out_file:
                 shutil.copyfileobj(response.raw, out_file)
             if i != 0 and i % 100 == 0:
