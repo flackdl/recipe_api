@@ -3,7 +3,7 @@
 <head>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<title>Recipe API</title>
+	<title>Recipe DB</title>
 	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.8.2/css/bulma.min.css">
 	<link rel="stylesheet" href="https://unpkg.com/buefy/dist/buefy.min.css">
 	<script defer src="https://use.fontawesome.com/releases/v5.3.1/js/all.js"></script>
@@ -12,71 +12,112 @@
 
 <body class="container">
 
-	<section class="section">
-		<div class="container">
-			<h1 class="title">Recipe API</h1>
-      <h2 class="subtitle">A recipe <strong>database</strong> with <strong>api</strong> access</h2>
-			<div id="app">
-				<router-view></router-view>
-			</div>
+	<div id="app">
+		<div>
+			<nav class="navbar" role="navigation" aria-label="main navigation">
+				<div id="navbarBasicExample" class="navbar-menu">
+					<div class="navbar-start">
+						<router-link to="/" class="navbar-item">
+							Home
+						</router-link>
+						<a class="navbar-item">
+							About
+						</a>
+						<a class="navbar-item">
+							API
+						</a>
+					</div>
+				</div>
+			</nav>
+			<section class="section">
+				<div class="container">
+					<router-view></router-view>
+				</div>
+			</section>
 		</div>
-	</section>
+	</div>
 
 	<script type="text/x-template" id="main">
 		<div>
-			<!-- search input -->
-			<form @submit="onSubmit">
-				<b-field>
-					<b-input placeholder="Search..." v-model="searchQuery" type="search" icon-pack="fas" size="is-large" icon="search">
-					</b-input>
-				</b-field>
-			</form>
-			<!-- search results -->
-			<div class="section columns is-multiline">
-				<div class="card column is-half-tablet is-one-third-desktop" v-for="recipe in searchResults" :key="recipe.slug">
-					<div class="card-image">
-						<figure class="image is-4by3">
-							<img :src="recipe.image_path">
-						</figure>
+			<section class="hero">
+				<div class="hero-body">
+					<div class="container">
+						<h1 class="title">Recipe Database</h1>
+						<h2 class="subtitle">A recipe <strong>database</strong> with <strong>api</strong> access</h2>
 					</div>
-
-					<router-link :to="{path: '/recipe/' + recipe.id}">
-						<div class="card-content">
-							<div class="media">
-								<div class="media-content">
-									<p class="title is-4">{{ recipe.name }}</p>
-									<p class="subtitle is-6">
-									<div>Time: {{ recipe.total_time }} minutes</div>
-									<div>Servings: {{ recipe.servings }}</div>
-									</p>
+				</div>
+			</section>
+			<div>
+				<!-- search input -->
+				<form @submit="onSubmit">
+					<b-field>
+						<b-input placeholder="Search..." v-model="searchQuery" type="search" icon-pack="fas" size="is-large" icon="search">
+						</b-input>
+					</b-field>
+				</form>
+				<!-- search results -->
+				<div class="section columns is-multiline">
+					<div class="card column is-half-tablet is-one-third-desktop" v-for="recipe in searchResults" :key="recipe.slug">
+						<router-link :to="{path: '/recipe/' + recipe.id}">
+							<div class="card-image">
+								<figure class="image is-4by3">
+									<img :src="recipe.image_path">
+								</figure>
+							</div>
+							<div class="card-content">
+								<div class="media">
+									<div class="media-content">
+										<p class="title is-4">{{ recipe.name }}</p>
+										<p class="subtitle is-6">
+											Time: {{ recipe.total_time }} minutes<br>
+											Servings: {{ recipe.servings }}
+										</p>
+									</div>
+								</div>
+								<div class="content">
+									{{ recipe.description }}
 								</div>
 							</div>
-							<div class="content">
-								{{ recipe.description }}
-							</div>
-						</div>
-					</router-link>
+						</router-link>
+					</div>
 				</div>
 			</div>
 		</div>
 	</script>
 
 	<script type="text/x-template" id="recipe">
-		<div v-if="recipe">
-			<div class="card-image">
-				<figure class="image is-4by3">
-					<img :src="recipe.image_path">
-				</figure>
-			</div>
+		<div v-if="recipe" class="card">
 			<div class="card-content">
 				<div class="media">
 					<div class="media-content">
 						<p class="title is-4">{{ recipe.name }}</p>
-						<p class="subtitle is-6">{{ recipe.total_time }}</p>
+						<p class="subtitle is-6">
+							<strong>Time:</strong> {{ recipe.total_time }} minutes <br>
+							<strong>Servings:</strong> {{ recipe.servings }}
+						</p>
 					</div>
 				</div>
 				<div class="content">
-					{{ recipe.description }}
+					<div class="columns">
+						<div class="column">
+							{{ recipe.description }}
+						</div>
+						<div class="column">
+							<figure class="image">
+								<img :src="recipe.image_path">
+							</figure>
+						</div>
+					</div>
+					<div class="columns">
+						<div class="column is-6">
+								<h2>Ingredients</h2>
+								<li v-for="ingredient in recipe.ingredients">{{ ingredient }}</li>
+						</div>
+						<div class="column is-6">
+							<h2>Instructions</h2>
+							<li v-for="instruction in recipe.instructions">{{ instruction }}</li>
+						</div>
+					</div>
 				</div>
 			</div>
 		</div>
@@ -92,6 +133,39 @@
 		el: '#app',
 		router: new VueRouter({
 			routes: [
+				{ path: '/',
+					component: {
+						template: '#main',
+						data: function () {
+							return {
+								searchQuery: '',
+								searchResults: [],
+							}
+						},
+						created: function () {
+							if (this.$route.query.search) {
+								this.searchQuery = this.$route.query.search;
+								this.search();
+							}
+						},
+						methods: {
+							onSubmit: function(e) {
+								this.$router.push({ path: '/', query: { search: this.searchQuery } });
+								this.search();
+								e.preventDefault();
+							},
+							search: function () {
+								fetch(`/api/recipe/?search=${this.searchQuery}`).then((response) => {
+									if (response.ok) {
+										response.json().then((data) => {
+											this.searchResults = data.results;
+										})
+									}
+								});
+							},
+						}
+					}
+				},
 				{ path: '/recipe/:id',
 					component: {
 						template: '#recipe',
@@ -107,34 +181,10 @@
 								recipe: null,
 							}
 						},
-						methods: function () {
-							return {}
+						methods: {
 						}
 					},
 				},
-				{ path: '/',
-					component: {
-						template: '#main',
-						data: function () {
-							return {
-								searchQuery: '',
-								searchResults: [],
-							}
-						},
-						methods: {
-							onSubmit: function(e) {
-								fetch(`/api/recipe/?search=${this.searchQuery}`).then((response) => {
-									if (response.ok) {
-										response.json().then((data) => {
-											this.searchResults = data.results;
-										})
-									}
-								});
-								e.preventDefault();
-							}
-						}
-					}
-				}
 			],
 		}),
 	});
