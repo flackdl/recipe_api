@@ -22,6 +22,6 @@ class CategoryViewSet(viewsets.ModelViewSet):
 class RecipeViewSet(viewsets.ModelViewSet):
     queryset = Recipe.objects.all()
     serializer_class = RecipeSerializer
-    filterset_fields = ['name', 'rating_value']
+    filterset_fields = ['name', 'rating_value', 'cuisines', 'categories']
     filter_backends = (SearchVectorFilter, DjangoFilterBackend)
     search_fields = ['search_vector']
