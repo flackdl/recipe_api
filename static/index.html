@@ -99,10 +99,17 @@
 				<div class="media">
 					<div class="media-content">
 						<p class="title is-4">{{ recipe.name }}</p>
-						<p class="subtitle is-6">
-							<strong>Time:</strong> {{ recipe.total_time }} minutes <br>
-							<strong>Servings:</strong> {{ recipe.servings }}
-						</p>
+						<div class="subtitle is-6">
+							<div><strong>Time:</strong> {{ recipe.total_time }} minutes</div>
+							<div><strong>Servings:</strong> {{ recipe.servings }}</div>
+							<div v-if="recipe.rating_value">
+								<b-tooltip :label="'Rating: ' + recipe.rating_value + ', Ratings: ' + recipe.rating_count" multilined>
+									<span v-for="rating in [1,2,3,4,5]" class="icon" :class="{'has-text-success': recipe.rating_value >= rating}">
+										<i class="far fa-star is-small"></i>
+									</span>
+								</b-tooltip>
+							</div>
+						</div>
 					</div>
 				</div>
 				<div class="content">
