@@ -51,8 +51,7 @@ class Command(BaseCommand):
             # set image path if it exists
             rel_image_path = os.path.join('static', 'recipes', '{}.jpg'.format(recipe['slug']))
             abs_image_path = os.path.join(settings.BASE_DIR, rel_image_path)
-            empty_url = '/static/recipes/empty.png'
-            image_url = '/' + rel_image_path if os.path.exists(abs_image_path) else empty_url
+            image_url = '/' + rel_image_path if os.path.exists(abs_image_path) else None
 
             # create recipe
             recipe_obj, _ = Recipe.objects.update_or_create(
