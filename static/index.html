@@ -18,7 +18,7 @@
 				<b-navbar>
 					<template slot="brand">
 						<b-navbar-item tag="router-link" to="/">
-							Home
+							<img src="/static/logo.png">
 						</b-navbar-item>
 					</template>
 					<template slot="start">
@@ -49,11 +49,30 @@
 			</section>
 			<div>
 				<!-- search input -->
-				<form @submit="onSubmit">
-					<b-field>
-						<b-input placeholder="Search..." v-model="searchQuery" type="search" icon-pack="fas" size="is-large" icon="search">
-						</b-input>
+				<form class="columns" @submit="onSubmit">
+					<div class="column is-6">
+						<b-field>
+							<b-input placeholder="Search..." v-model="searchQuery" type="search" icon-pack="fas" size="is-large" icon="search">
+							</b-input>
+						</b-field>
+					</div>
+					<!-- cuisine filter -->
+					<b-field class="column">
+						<b-taginput
+							v-model="cuisinesChosen"
+							:data="cuisinesFiltered"
+							size="is-large"
+							autocomplete
+							:open-on-focus="true"
+							field="name"
+							placeholder="cuisines..."
+							@add="cuisineAdded"
+							@typing="getFilteredCuisines">
+						</b-taginput>
 					</b-field>
+					<div class="column">
+						<button class="button is-primary is-light is-large">Search</button>
+					</div>
 				</form>
 				<!-- search results -->
 				<div class="section columns is-multiline">
@@ -163,15 +182,19 @@
 <script src="https://unpkg.com/vue-router@3.1.6/dist/vue-router.js"></script>
 
 <script>
-	new Vue({
+	let app = new Vue({
 		el: '#app',
 		router: new VueRouter({
 			routes: [
 				{ path: '/',
+					name: 'main',
 					component: {
 						template: '#main',
 						data () {
 							return {
+								cuisines: [],
+								cuisinesFiltered: [],
+								cuisinesChosen: [],
 								searchQuery: '',
 								searchResults: [],
 								isLoading: false,
@@ -179,12 +202,36 @@
 							}
 						},
 						created () {
-							if (this.$route.query.search) {
-								this.searchQuery = this.$route.query.search;
-								this.search();
-							}
+							this.loadCoreData().then(() => {
+								if (this.$route.query.search) {
+									this.searchQuery = this.$route.query.search;
+									this.search();
+								}
+							})
 						},
 						methods: {
+							cuisineAdded() {
+								this.cuisinesFiltered = this.cuisines.slice();
+							},
+							getFilteredCuisines(text) {
+								this.cuisinesFiltered = this.cuisines.filter((cuisine) => {
+									return cuisine.name
+										.toLowerCase()
+										.indexOf(text.toLowerCase()) >= 0
+								})
+							},
+							loadCoreData() {
+								this.showLoading();
+								return fetch(`/api/cuisine/`).then((response) => {
+									if (response.ok) {
+										return response.json().then((data) => {
+											this.cuisines = data.results;
+											this.cuisinesFiltered = this.cuisines.slice();
+											this.hideLoading();
+										})
+									}
+								});
+							},
 							showLoading() {
 								this.loadingComponent = this.$buefy.loading.open();
 							},
@@ -192,13 +239,24 @@
 								this.loadingComponent.close();
 							},
 							onSubmit (e) {
-								this.$router.push({ path: '/', query: { search: this.searchQuery } });
+								if (this.$router.currentRoute.name !== 'main') {
+									this.$router.push({
+										name: 'main',
+										query: {
+											search: this.searchQuery,
+											cuisines: this.cuisinesChosen,
+										},
+									});
+								}
 								this.search();
 								e.preventDefault();
 							},
 							search () {
 								this.showLoading();
-								fetch(`/api/recipe/?search=${this.searchQuery}`).then((response) => {
+								let params = this.cuisinesChosen.map((cuisine) => {
+									return `cuisines=${cuisine.id}`;
+								})
+								fetch(`/api/recipe/?search=${this.searchQuery}&${params.join('&')}`).then((response) => {
 									if (response.ok) {
 										response.json().then((data) => {
 											this.searchResults = data.results;
@@ -211,6 +269,7 @@
 					}
 				},
 				{ path: '/recipe/:id',
+					name: 'recipe',
 					component: {
 						template: '#recipe',
 						created () {
@@ -229,7 +288,7 @@
 						}
 					},
 				},
-				{ path: '/api', component: { template: '#api' }},
+				{ path: '/api', name: 'api', component: { template: '#api' }},
 			],
 		}),
 	});
