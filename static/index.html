@@ -239,15 +239,13 @@
 								this.loadingComponent.close();
 							},
 							onSubmit (e) {
-								if (this.$router.currentRoute.name !== 'main') {
-									this.$router.push({
-										name: 'main',
-										query: {
-											search: this.searchQuery,
-											cuisines: this.cuisinesChosen,
-										},
-									});
-								}
+								this.$router.push({
+									name: 'main',
+									query: {
+										search: this.searchQuery,
+										cuisines: this.cuisinesChosen,
+									},
+								});
 								this.search();
 								e.preventDefault();
 							},
