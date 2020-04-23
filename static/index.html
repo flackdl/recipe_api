@@ -8,6 +8,11 @@
 	<link rel="stylesheet" href="https://unpkg.com/buefy/dist/buefy.min.css">
 	<script defer src="https://use.fontawesome.com/releases/v5.3.1/js/all.js"></script>
 	<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.2.0/css/all.css">
+	<style>
+		.recipe-image {
+			object-fit: cover;
+		}
+	</style>
 </head>
 
 <body>
@@ -80,7 +85,7 @@
 						<router-link :to="{path: '/recipe/' + recipe.id}">
 							<div class="card-image">
 								<figure class="image is-4by3">
-									<img :src="recipe.image_path">
+									<img class="recipe-image" :src="recipe.image_path">
 								</figure>
 							</div>
 							<div class="card-content">
