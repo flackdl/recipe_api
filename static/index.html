@@ -10,25 +10,24 @@
 	<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.2.0/css/all.css">
 </head>
 
-<body class="container">
+<body>
 
-	<div id="app">
+	<div id="app" class="container">
 		<div>
-			<nav class="navbar" role="navigation" aria-label="main navigation">
-				<div id="navbarBasicExample" class="navbar-menu">
-					<div class="navbar-start">
-						<router-link to="/" class="navbar-item">
+			<template>
+				<b-navbar>
+					<template slot="brand">
+						<b-navbar-item tag="router-link" to="/">
 							Home
-						</router-link>
-						<a class="navbar-item">
-							About
-						</a>
-						<a class="navbar-item">
+						</b-navbar-item>
+					</template>
+					<template slot="start">
+						<b-navbar-item tag="router-link" to="/api">
 							API
-						</a>
-					</div>
-				</div>
-			</nav>
+						</b-navbar-item>
+					</template>
+				</b-navbar>
+			</template>
 			<section class="section">
 				<div class="container">
 					<router-view></router-view>
@@ -37,6 +36,7 @@
 		</div>
 	</div>
 
+	<!-- home -->
 	<script type="text/x-template" id="main">
 		<div>
 			<section class="hero">
@@ -69,8 +69,15 @@
 									<div class="media-content">
 										<p class="title is-4">{{ recipe.name }}</p>
 										<p class="subtitle is-6">
-											Time: {{ recipe.total_time }} minutes<br>
-											Servings: {{ recipe.servings }}
+										<div>Time: {{ recipe.total_time }} minutes</div>
+										<div>Servings: {{ recipe.servings }}</div>
+										<div v-if="recipe.rating_value">
+											<b-tooltip :label="'Rating: ' + recipe.rating_value + ', Ratings: ' + recipe.rating_count" multilined>
+												<span v-for="rating in [1,2,3,4,5]">
+													<i class="far fa-star is-small" :class="{'has-text-success': recipe.rating_value >= rating}"></i>
+												</span>
+											</b-tooltip>
+										</div>
 										</p>
 									</div>
 								</div>
@@ -85,6 +92,7 @@
 		</div>
 	</script>
 
+	<!-- recipe -->
 	<script type="text/x-template" id="recipe">
 		<div v-if="recipe" class="card">
 			<div class="card-content">
@@ -123,6 +131,25 @@
 		</div>
   </script>
 
+	<!-- api -->
+	<script type="text/x-template" id="api">
+		<section class="hero">
+			<div class="hero-body">
+				<div class="container">
+					<h1 class="title">
+						Recipe API
+					</h1>
+					<h2 class="subtitle">
+						Access the REST API to search for recipes.  See <a href="https://github.com/flackdl/recipe_api" target="_blank">flackdl/recipe_api</a> source on github.
+					</h2>
+					<div class="content">
+						<a href="/api/">/api/</a>
+					</div>
+				</div>
+			</div>
+		</section>
+  </script>
+
 <script src="https://unpkg.com/vue"></script>
 <script src="https://unpkg.com/buefy/dist/buefy.min.js"></script>
 <script src="https://unpkg.com/rxjs@6.5.5/bundles/rxjs.umd.min.js"></script>
@@ -136,29 +163,39 @@
 				{ path: '/',
 					component: {
 						template: '#main',
-						data: function () {
+						data () {
 							return {
 								searchQuery: '',
 								searchResults: [],
+								isLoading: false,
+								loadingComponent: null,
 							}
 						},
-						created: function () {
+						created () {
 							if (this.$route.query.search) {
 								this.searchQuery = this.$route.query.search;
 								this.search();
 							}
 						},
 						methods: {
-							onSubmit: function(e) {
+							showLoading() {
+								this.loadingComponent = this.$buefy.loading.open();
+							},
+							hideLoading () {
+								this.loadingComponent.close();
+							},
+							onSubmit (e) {
 								this.$router.push({ path: '/', query: { search: this.searchQuery } });
 								this.search();
 								e.preventDefault();
 							},
-							search: function () {
+							search () {
+								this.showLoading();
 								fetch(`/api/recipe/?search=${this.searchQuery}`).then((response) => {
 									if (response.ok) {
 										response.json().then((data) => {
 											this.searchResults = data.results;
+											this.hideLoading();
 										})
 									}
 								});
@@ -169,14 +206,14 @@
 				{ path: '/recipe/:id',
 					component: {
 						template: '#recipe',
-						created: function () {
+						created () {
 							fetch(`/api/recipe/${this.$route.params.id}/`).then((response) => {
 								response.json().then((data) => {
 									this.recipe = data;
 								})
 							})
 						},
-						data: function () {
+						data () {
 							return {
 								recipe: null,
 							}
@@ -185,6 +222,7 @@
 						}
 					},
 				},
+				{ path: '/api', component: { template: '#api' }},
 			],
 		}),
 	});
