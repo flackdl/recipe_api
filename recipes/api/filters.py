@@ -26,6 +26,7 @@ class SearchVectorFilter(SearchFilter):
             # include and order by search rank
             queryset = queryset.model.objects.annotate(search_rank=SearchRank(F('search_vector'), search_query)).filter(search_vector=search_query)
             queryset = queryset.order_by('-search_rank')
+            queryset = queryset.order_by(F('image_path').asc(nulls_last=True))
         return queryset
 
     def construct_search(self, field_name):
