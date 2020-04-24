@@ -85,7 +85,7 @@
 						<router-link :to="{path: '/recipe/' + recipe.id}">
 							<div class="card-image">
 								<figure class="image is-4by3">
-									<img class="recipe-image" :src="recipe.image_path">
+									<img class="recipe-image" :src="recipe.image_path || '/static/recipes/empty.png'">
 								</figure>
 							</div>
 							<div class="card-content">
