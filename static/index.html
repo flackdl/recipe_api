@@ -262,7 +262,12 @@
 								fetch(`/api/recipe/?search=${this.searchQuery}&${params.join('&')}`).then((response) => {
 									if (response.ok) {
 										response.json().then((data) => {
-											this.searchResults = data.results;
+											// sort recipes without images last
+											this.searchResults = data.results.filter((r) => {
+												return r.image_path;
+											}).concat(data.results.filter((r) => {
+												return !r.image_path;
+											}));
 											this.hideLoading();
 										})
 									}
