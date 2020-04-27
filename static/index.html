@@ -284,7 +284,10 @@
 								this.isLoading = true;
 								let params = this.cuisinesChosen.map((cuisine) => {
 									return `cuisines=${cuisine.id}`;
-								}).concat([`has_image=${this.hasImage}`]);
+								});
+								if (this.hasImage) {
+									params = params.concat([`has_image=${this.hasImage}`]);
+								}
 								fetch(`/api/recipe/?search=${this.searchQuery}&${params.join('&')}`).then((response) => {
 									if (response.ok) {
 										response.json().then((data) => {
