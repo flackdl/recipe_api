@@ -2,6 +2,31 @@ from functools import reduce
 from django.contrib.postgres.search import SearchRank, SearchQuery
 from django.db.models import F
 from rest_framework.filters import SearchFilter
+from django_filters import rest_framework as filters
+
+from recipes.models import Recipe
+
+
+class RecipeFilter(filters.FilterSet):
+    has_image = filters.BooleanFilter(field_name="image_path", lookup_expr='isnull', label='Has Image', exclude=True)
+
+    def filter_queryset(self, queryset):
+        # order by existing fields and then rating with nulls last
+        return super().filter_queryset(queryset).order_by(
+            *queryset.query.order_by,
+            F('rating_value').desc(nulls_last=True),
+            '-rating_count',
+        )
+
+    class Meta:
+        model = Recipe
+        fields = {
+            'name': ['exact'],
+            'rating_value': ['gte'],
+            'rating_count': ['gte'],
+            'categories': ['exact'],
+            'cuisines': ['exact'],
+        }
 
 
 class SearchVectorFilter(SearchFilter):

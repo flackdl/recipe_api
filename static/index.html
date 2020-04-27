@@ -23,7 +23,7 @@
 				<b-navbar>
 					<template slot="brand">
 						<b-navbar-item tag="router-link" to="/">
-							<img src="/static/logo.png">
+							<img src="/static/logo.png">&nbsp;&nbsp;Home
 						</b-navbar-item>
 					</template>
 					<template slot="start">
@@ -53,20 +53,21 @@
 				</div>
 			</section>
 			<div>
-				<!-- search input -->
-				<form class="columns" @submit="onSubmit">
-					<div class="column is-6">
+				<!-- search -->
+				<form class="columns is-multiline" @submit="onSearch">
+					<!-- search input -->
+					<div class="column is-12">
 						<b-field>
 							<b-input placeholder="Search..." v-model="searchQuery" type="search" icon-pack="fas" size="is-large" icon="search">
 							</b-input>
 						</b-field>
 					</div>
 					<!-- cuisine filter -->
-					<b-field class="column">
+					<b-field class="column is-4">
 						<b-taginput
 							v-model="cuisinesChosen"
 							:data="cuisinesFiltered"
-							size="is-large"
+							size="is-small"
 							autocomplete
 							:open-on-focus="true"
 							field="name"
@@ -75,12 +76,32 @@
 							@typing="getFilteredCuisines">
 						</b-taginput>
 					</b-field>
-					<div class="column">
+					<!-- categories filter -->
+					<!-- TODO
+					<b-field class="column is-4">
+						<b-taginput
+							placeholder="categories..."
+							size="is-small"
+						>
+						</b-taginput>
+					</b-field>
+					-->
+					<div class="field column">
+						<b-switch size="is-small" v-model="hasImage">has image</b-switch>
+					</div>
+					<div class="column is-12" style="text-align: right">
 						<button class="button is-primary is-light is-large">Search</button>
 					</div>
 				</form>
+				<!-- search results loading -->
+				<section v-if="isLoading">
+					<b-skeleton width="20%" :animated="true"></b-skeleton>
+					<b-skeleton width="40%" :animated="true"></b-skeleton>
+					<b-skeleton width="80%" :animated="true"></b-skeleton>
+					<b-skeleton :animated="true"></b-skeleton>
+				</section>
 				<!-- search results -->
-				<div class="section columns is-multiline">
+				<div v-if="!isLoading" class="section columns is-multiline">
 					<div class="card column is-half-tablet is-one-third-desktop" v-for="recipe in searchResults" :key="recipe.slug">
 						<router-link :to="{path: '/recipe/' + recipe.id}">
 							<div class="card-image">
@@ -96,7 +117,7 @@
 										<div>Time: {{ recipe.total_time }} minutes</div>
 										<div>Servings: {{ recipe.servings }}</div>
 										<div v-if="recipe.rating_value">
-											<b-tooltip :label="'Rating: ' + recipe.rating_value + ', Ratings: ' + recipe.rating_count" multilined>
+											<b-tooltip position="is-right" :label="'Rating: ' + recipe.rating_value + ', Ratings: ' + recipe.rating_count" multilined>
 												<span v-for="rating in [1,2,3,4,5]">
 													<i class="far fa-star is-small" :class="{'has-text-success': recipe.rating_value >= rating}"></i>
 												</span>
@@ -171,10 +192,17 @@
 						Recipe API
 					</h1>
 					<h2 class="subtitle">
-						Access the REST API to search for recipes.  See <a href="https://github.com/flackdl/recipe_api" target="_blank">flackdl/recipe_api</a> source on github.
+						The recipe database is powered by a public REST API.  The source code is open source.
 					</h2>
 					<div class="content">
-						<a href="/api/">/api/</a>
+						<ul>
+							<li>
+								<a href="/api/">api</a>
+							</li>
+							<li>
+								<a href="https://github.com/flackdl/recipe_api">source code</a>
+							</li>
+						</ul>
 					</div>
 				</div>
 			</div>
@@ -204,15 +232,13 @@
 								searchResults: [],
 								isLoading: false,
 								loadingComponent: null,
+								hasImage: true,
 							}
 						},
 						created () {
 							this.loadCoreData().then(() => {
-								if (this.$route.query.search) {
-									this.searchQuery = this.$route.query.search;
-									this.search();
-								}
-							})
+								this.search();
+							});
 						},
 						methods: {
 							cuisineAdded() {
@@ -243,7 +269,7 @@
 							hideLoading () {
 								this.loadingComponent.close();
 							},
-							onSubmit (e) {
+							onSearch (e) {
 								this.$router.push({
 									name: 'main',
 									query: {
@@ -255,21 +281,18 @@
 								e.preventDefault();
 							},
 							search () {
-								this.showLoading();
+								this.isLoading = true;
 								let params = this.cuisinesChosen.map((cuisine) => {
 									return `cuisines=${cuisine.id}`;
-								})
+								}).concat([`has_image=${this.hasImage}`]);
 								fetch(`/api/recipe/?search=${this.searchQuery}&${params.join('&')}`).then((response) => {
 									if (response.ok) {
 										response.json().then((data) => {
-											// sort recipes without images last
-											this.searchResults = data.results.filter((r) => {
-												return r.image_path;
-											}).concat(data.results.filter((r) => {
-												return !r.image_path;
-											}));
-											this.hideLoading();
+											this.searchResults = data.results;
+											this.isLoading = false;
 										})
+									} else {
+										// TODO - show error
 									}
 								});
 							},
