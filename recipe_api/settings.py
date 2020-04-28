@@ -160,3 +160,7 @@ LOGGING = {
         'level': 'INFO',
     },
 }
+
+
+# see migrations/0013_auto_20200428_1416.py
+POSTGRES_LANGUAGE_UNACCENT = 'unaccent'
