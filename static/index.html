@@ -234,6 +234,7 @@
 						},
 						created () {
 							this.loadCoreData().then(() => {
+								this.searchQuery = this.$route.query.search;
 								this.search();
 							});
 						},
