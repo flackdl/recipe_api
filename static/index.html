@@ -268,7 +268,7 @@
 							},
 							onSearch (e) {
 								// blur the input so the keyboard disappears on mobile
-								e.target.querySelector('#search').blur();
+								document.querySelector('#search').blur();
 
 								// update the router params
 								this.$router.push({
