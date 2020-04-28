@@ -58,7 +58,7 @@
 					<!-- search input -->
 					<div class="column is-12">
 						<b-field>
-							<b-input placeholder="Search..." v-model="searchQuery" type="search" icon-pack="fas" size="is-large" icon="search">
+							<b-input placeholder="Search..." id="search" v-model="searchQuery" type="search" icon-pack="fas" size="is-large" icon="search">
 							</b-input>
 						</b-field>
 					</div>
@@ -266,7 +266,11 @@
 							hideLoading () {
 								this.loadingComponent.close();
 							},
-							onSearch (e, v) {
+							onSearch (e) {
+								// blur the input so the keyboard disappears on mobile
+								e.target.querySelector('#search').blur();
+
+								// update the router params
 								this.$router.push({
 									name: 'main',
 									query: {
@@ -274,6 +278,8 @@
 										cuisines: this.cuisinesChosen,
 									},
 								});
+
+								// perform the search
 								this.search();
 								e.preventDefault();
 							},
