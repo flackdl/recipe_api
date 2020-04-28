@@ -11,6 +11,7 @@ from django.conf import settings
 from django.contrib.postgres.search import SearchVector
 from django.core.management.base import BaseCommand, CommandError
 
+from recipe_api.settings import POSTGRES_LANGUAGE_UNACCENT
 from recipes.models import Recipe, Category, Cuisine
 
 
@@ -53,13 +54,18 @@ class Command(BaseCommand):
             abs_image_path = os.path.join(settings.BASE_DIR, rel_image_path)
             image_url = '/' + rel_image_path if os.path.exists(abs_image_path) else None
 
+            # TODO - add detail viewset to get recipe by slug vs id
+            # update external recipe urls to internal ones
+            #description = re.sub(r'https://cooking.nytimes.com/recipes/', '#/recipe/', recipe['description'] or '')
+            description = recipe['description']
+
             # create recipe
             recipe_obj, _ = Recipe.objects.update_or_create(
                 slug=recipe['slug'],
                 defaults=dict(
                     name=recipe['name'],
                     image_path=image_url,
-                    description=recipe['description'],
+                    description=description,
                     # parse duration like "PT45M" to 45 minutes
                     total_time=parse_duration(recipe['totalTime']).seconds / 60 if 'totalTime' in recipe else None,
                     servings=recipe['recipeYield'],
@@ -93,7 +99,7 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.SUCCESS('Ingested {} recipes'.format(i)))
 
         # add search vector
-        vector = SearchVector('name', weight='A') + SearchVector('ingredients', weight='B')
+        vector = SearchVector('name', weight='A', config=POSTGRES_LANGUAGE_UNACCENT) + SearchVector('ingredients', weight='B', config=POSTGRES_LANGUAGE_UNACCENT)
         Recipe.objects.update(search_vector=vector)
 
         self.stdout.write(self.style.SUCCESS('Complete'))
