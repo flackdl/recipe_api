@@ -87,7 +87,7 @@
 					</b-field>
 					-->
 					<div class="field column">
-						<b-switch size="is-small" v-model="hasImage">has image</b-switch>
+						<b-switch size="is-small" v-model="hasImage" @change.native="onSearch($event)">has image</b-switch>
 					</div>
 					<div class="column is-12" style="text-align: right">
 						<button class="button is-primary is-light is-large">Search</button>
@@ -103,7 +103,7 @@
 				<!-- search results -->
 				<div v-if="!isLoading" class="section columns is-multiline">
 					<div class="card column is-half-tablet is-one-third-desktop" v-for="recipe in searchResults" :key="recipe.slug">
-						<router-link :to="{path: '/recipe/' + recipe.id}">
+						<router-link :to="{path: '/recipe/' + recipe.id}" class="has-text-dark">
 							<div class="card-image">
 								<figure class="image is-4by3">
 									<img class="recipe-image" :src="recipe.image_path || '/static/recipes/empty.png'">
@@ -126,9 +126,8 @@
 										</p>
 									</div>
 								</div>
-								<div class="content">
-									{{ recipe.description }}
-								</div>
+								<!-- description -->
+								<div class="content" v-html="recipe.description"></div>
 							</div>
 						</router-link>
 					</div>
@@ -159,9 +158,7 @@
 				</div>
 				<div class="content">
 					<div class="columns">
-						<div class="column">
-							{{ recipe.description }}
-						</div>
+						<div class="column" v-html="recipe.description"></div>
 						<div class="column">
 							<figure class="image">
 								<img :src="recipe.image_path">
@@ -209,8 +206,8 @@
 		</section>
   </script>
 
-<script src="https://unpkg.com/vue"></script>
-<script src="https://unpkg.com/buefy/dist/buefy.min.js"></script>
+<script src="https://unpkg.com/vue@2.6.11/dist/vue.js"></script>
+<script src="https://unpkg.com/buefy@0.8.17/dist/buefy.min.js"></script>
 <script src="https://unpkg.com/rxjs@6.5.5/bundles/rxjs.umd.min.js"></script>
 <script src="https://unpkg.com/vue-router@3.1.6/dist/vue-router.js"></script>
 
@@ -269,7 +266,7 @@
 							hideLoading () {
 								this.loadingComponent.close();
 							},
-							onSearch (e) {
+							onSearch (e, v) {
 								this.$router.push({
 									name: 'main',
 									query: {
