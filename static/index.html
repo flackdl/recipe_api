@@ -113,17 +113,17 @@
 								<div class="media">
 									<div class="media-content">
 										<p class="title is-4">{{ recipe.name }}</p>
-										<p class="subtitle is-6">
-										<div>Time: {{ recipe.total_time }} minutes</div>
-										<div>Servings: {{ recipe.servings }}</div>
-										<div v-if="recipe.rating_value">
-											<b-tooltip position="is-right" :label="'Rating: ' + recipe.rating_value + ', Ratings: ' + recipe.rating_count" multilined>
+										<div class="subtitle is-6">
+											<div><span class="tag is-light">Time</span> {{ recipe.total_time }} minutes</div>
+											<div><span class="tag is-light">Servings</span> {{ recipe.servings }}</div>
+											<div v-if="recipe.rating_value">
+												<span class="tag is-light">Rating</span>
 												<span v-for="rating in [1,2,3,4,5]">
 													<i class="far fa-star is-small" :class="{'has-text-success': recipe.rating_value >= rating}"></i>
 												</span>
-											</b-tooltip>
+												<small class="has-text-grey-light">({{ recipe.rating_count }})</small>
+											</div>
 										</div>
-										</p>
 									</div>
 								</div>
 								<!-- description -->
@@ -234,12 +234,13 @@
 						},
 						created () {
 							this.loadCoreData().then(() => {
-								this.searchQuery = this.$route.query.search;
+								this.searchQuery = this.$route.query.search || '';
 								this.search();
 							});
 						},
 						methods: {
 							cuisineAdded() {
+								// reset the cuisines choices
 								this.cuisinesFiltered = this.cuisines.slice();
 							},
 							getFilteredCuisines(text) {
