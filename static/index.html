@@ -112,18 +112,7 @@
 							<div class="card-content">
 								<div class="media">
 									<div class="media-content">
-										<p class="title is-4">{{ recipe.name }}</p>
-										<div class="subtitle is-6">
-											<div><span class="tag is-light">Time</span> {{ recipe.total_time }} minutes</div>
-											<div><span class="tag is-light">Servings</span> {{ recipe.servings }}</div>
-											<div v-if="recipe.rating_value">
-												<span class="tag is-light">Rating</span>
-												<span v-for="rating in [1,2,3,4,5]">
-													<i class="far fa-star is-small" :class="{'has-text-success': recipe.rating_value >= rating}"></i>
-												</span>
-												<small class="has-text-grey-light">({{ recipe.rating_count }})</small>
-											</div>
-										</div>
+										<recipe-header :recipe="recipe"></recipe-header>
 									</div>
 								</div>
 								<!-- description -->
@@ -136,24 +125,32 @@
 		</div>
 	</script>
 
+
+	<!-- recipe header -->
+	<script type="text/x-template" id="recipe-header">
+		<div>
+			<p class="title is-4">{{ recipe.name }}</p>
+			<div class="subtitle is-6">
+				<div><span class="tag is-light">Time</span> {{ recipe.total_time }} minutes</div>
+				<div><span class="tag is-light">Servings</span> {{ recipe.servings }}</div>
+				<div v-if="recipe.rating_value">
+					<span class="tag is-light">Rating</span>
+					<span v-for="rating in [1,2,3,4,5]">
+					<i class="far fa-star is-small" :class="{'has-text-success': recipe.rating_value >= rating}"></i>
+				</span>
+					<small class="has-text-grey-light">({{ recipe.rating_count }})</small>
+				</div>
+			</div>
+		</div>
+	</script>
+
 	<!-- recipe -->
 	<script type="text/x-template" id="recipe">
 		<div v-if="recipe" class="card">
 			<div class="card-content">
 				<div class="media">
 					<div class="media-content">
-						<p class="title is-4">{{ recipe.name }}</p>
-						<div class="subtitle is-6">
-							<div><strong>Time:</strong> {{ recipe.total_time }} minutes</div>
-							<div><strong>Servings:</strong> {{ recipe.servings }}</div>
-							<div v-if="recipe.rating_value">
-								<b-tooltip :label="'Rating: ' + recipe.rating_value + ', Ratings: ' + recipe.rating_count" multilined>
-									<span v-for="rating in [1,2,3,4,5]" class="icon" :class="{'has-text-success': recipe.rating_value >= rating}">
-										<i class="far fa-star is-small"></i>
-									</span>
-								</b-tooltip>
-							</div>
-						</div>
+						<recipe-header :recipe="recipe"></recipe-header>
 					</div>
 				</div>
 				<div class="content">
@@ -212,6 +209,16 @@
 <script src="https://unpkg.com/vue-router@3.1.6/dist/vue-router.js"></script>
 
 <script>
+	// recipe header component
+	Vue.component('recipe-header', {
+		props: ['recipe'],
+		data: function () {
+			return {
+			}
+		},
+		template: '#recipe-header',
+	});
+	// main app
 	let app = new Vue({
 		el: '#app',
 		router: new VueRouter({
