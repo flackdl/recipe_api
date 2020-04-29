@@ -101,24 +101,29 @@
 					<b-skeleton :animated="true"></b-skeleton>
 				</section>
 				<!-- search results -->
-				<div v-if="!isLoading" class="section columns is-multiline">
-					<div class="card column is-half-tablet is-one-third-desktop" v-for="recipe in searchResults" :key="recipe.slug">
-						<router-link :to="{path: '/recipe/' + recipe.id}" class="has-text-dark">
-							<div class="card-image">
-								<figure class="image is-4by3">
-									<img class="recipe-image" :src="recipe.image_path || '/static/recipes/empty.png'">
-								</figure>
-							</div>
-							<div class="card-content">
-								<div class="media">
-									<div class="media-content">
-										<recipe-header :recipe="recipe"></recipe-header>
-									</div>
+				<div v-if="!isLoading">
+					<div v-if="searchResults.length === 0" class="notification is-warning">
+						There were no results found
+					</div>
+					<div class="section columns is-multiline">
+						<div class="card column is-half-tablet is-one-third-desktop" v-for="recipe in searchResults" :key="recipe.slug">
+							<router-link :to="{path: '/recipe/' + recipe.id}" class="has-text-dark">
+								<div class="card-image">
+									<figure class="image is-4by3">
+										<img class="recipe-image" :src="recipe.image_path || '/static/recipes/empty.png'">
+									</figure>
 								</div>
-								<!-- description -->
-								<div class="content" v-html="recipe.description"></div>
-							</div>
-						</router-link>
+								<div class="card-content">
+									<div class="media">
+										<div class="media-content">
+											<recipe-header :recipe="recipe"></recipe-header>
+										</div>
+									</div>
+									<!-- description -->
+									<div class="content" v-html="recipe.description"></div>
+								</div>
+							</router-link>
+						</div>
 					</div>
 				</div>
 			</div>
