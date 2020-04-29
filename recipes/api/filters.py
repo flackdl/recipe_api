@@ -23,6 +23,7 @@ class RecipeFilter(filters.FilterSet):
         model = Recipe
         fields = {
             'name': ['exact'],
+            'slug': ['exact'],
             'rating_value': ['gte'],
             'rating_count': ['gte'],
             'categories': ['exact'],

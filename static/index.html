@@ -107,7 +107,7 @@
 					</div>
 					<div class="section columns is-multiline">
 						<div class="card column is-half-tablet is-one-third-desktop" v-for="recipe in searchResults" :key="recipe.slug">
-							<router-link :to="{path: '/recipe/' + recipe.id}" class="has-text-dark">
+							<router-link :to="{path: '/recipe/' + recipe.slug}" class="has-text-dark">
 								<div class="card-image">
 									<figure class="image is-4by3">
 										<img class="recipe-image" :src="recipe.image_path || '/static/recipes/empty.png'">
@@ -246,6 +246,7 @@
 						},
 						created () {
 							this.loadCoreData().then(() => {
+								document.title = 'Recipe DB';
 								this.searchQuery = this.$route.query.search || '';
 								this.search();
 							});
@@ -319,14 +320,17 @@
 						}
 					}
 				},
-				{ path: '/recipe/:id',
+				{ path: '/recipe/:slug',
 					name: 'recipe',
 					component: {
 						template: '#recipe',
 						created () {
-							fetch(`/api/recipe/${this.$route.params.id}/`).then((response) => {
+							fetch(`/api/recipe/?slug=${this.$route.params.slug}`).then((response) => {
 								response.json().then((data) => {
-									this.recipe = data;
+									if (data.results.length) {
+										this.recipe = data.results[0];
+										document.title = this.recipe.name;
+									}
 								})
 							})
 						},
