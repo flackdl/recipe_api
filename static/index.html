@@ -76,16 +76,20 @@
 							@typing="getFilteredCuisines">
 						</b-taginput>
 					</b-field>
-					<!-- categories filter -->
-					<!-- TODO
+					<!-- category filter -->
 					<b-field class="column is-4">
 						<b-taginput
-							placeholder="categories..."
+							v-model="categoriesChosen"
+							:data="categoriesFiltered"
 							size="is-small"
-						>
+							autocomplete
+							:open-on-focus="true"
+							field="name"
+							placeholder="categories..."
+							@add="categoryAdded"
+							@typing="getFilteredCategories">
 						</b-taginput>
 					</b-field>
-					-->
 					<div class="field column">
 						<b-switch size="is-small" v-model="hasImage" @change.native="onSearch($event)">has image</b-switch>
 					</div>
@@ -235,8 +239,11 @@
 						data () {
 							return {
 								cuisines: [],
+								categories: [],
 								cuisinesFiltered: [],
+								categoriesFiltered: [],
 								cuisinesChosen: [],
+								categoriesChosen: [],
 								searchQuery: '',
 								searchResults: [],
 								isLoading: false,
@@ -245,7 +252,7 @@
 							}
 						},
 						created () {
-							this.loadCoreData().then(() => {
+							this.loadCoreData().subscribe(() => {
 								document.title = 'Recipe DB';
 								this.searchQuery = this.$route.query.search || '';
 								this.search();
@@ -256,6 +263,10 @@
 								// reset the cuisines choices
 								this.cuisinesFiltered = this.cuisines.slice();
 							},
+							categoryAdded() {
+								// reset the categories choices
+								this.categoriesFiltered = this.categories.slice();
+							},
 							getFilteredCuisines(text) {
 								this.cuisinesFiltered = this.cuisines.filter((cuisine) => {
 									return cuisine.name
@@ -263,17 +274,35 @@
 										.indexOf(text.toLowerCase()) >= 0
 								})
 							},
+							getFilteredCategories(text) {
+								this.categoriesFiltered = this.categories.filter((category) => {
+									return category.name
+										.toLowerCase()
+										.indexOf(text.toLowerCase()) >= 0
+								})
+							},
 							loadCoreData() {
 								this.showLoading();
-								return fetch(`/api/cuisine/`).then((response) => {
-									if (response.ok) {
-										return response.json().then((data) => {
+								return rxjs.forkJoin({
+									'categories': rxjs.ajax.ajax.getJSON('/api/category/').pipe(
+										rxjs.operators.map((data) => {
+											this.categories = data.results;
+											this.categoriesFiltered = this.categories.slice();
+											return this.categories;
+										}),
+									),
+									'cuisines': rxjs.ajax.ajax.getJSON('/api/cuisine/').pipe(
+										rxjs.operators.map((data) => {
 											this.cuisines = data.results;
 											this.cuisinesFiltered = this.cuisines.slice();
-											this.hideLoading();
-										})
-									}
-								});
+											return this.cuisines;
+										}),
+									),
+								}).pipe(
+									rxjs.operators.tap(() => {
+										this.hideLoading();
+									})
+								);
 							},
 							showLoading() {
 								this.loadingComponent = this.$buefy.loading.open();
@@ -282,7 +311,8 @@
 								this.loadingComponent.close();
 							},
 							onSearch (e) {
-								// blur the input so the keyboard disappears on mobile
+
+								// blur the input so the keyboard disappears on mobile devices
 								document.querySelector('#search').blur();
 
 								// update the router params
@@ -291,6 +321,7 @@
 									query: {
 										search: this.searchQuery,
 										cuisines: this.cuisinesChosen,
+										categories: this.categoriesChosen,
 									},
 								});
 
@@ -300,9 +331,13 @@
 							},
 							search () {
 								this.isLoading = true;
+								// add cuisines and categories filter
 								let params = this.cuisinesChosen.map((cuisine) => {
 									return `cuisines=${cuisine.id}`;
-								});
+								}).concat(this.categoriesChosen.map((category) => {
+									return `categories=${category.id}`;
+								}));
+								// add image filter
 								if (this.hasImage) {
 									params = params.concat([`has_image=${this.hasImage}`]);
 								}

@@ -1,8 +1,8 @@
 # Recipe API
 
-### Overview
-
 This is an open source recipe database and api.
+
+### Overview
 
 - The recipes are stored in a postgres database with [full-text search](https://www.postgresql.org/docs/9.5/textsearch.html) enabled
 - The REST API powers the single-page-application front-end
@@ -23,3 +23,33 @@ This is an open source recipe database and api.
 #### Result
 ![](static/screenshots/result.png)
 
+### Development
+
+Start postgres:
+
+    docker-compose up -d postgres
+    
+Install python dependencies:
+
+    pip install -r requirements.txt
+    
+Create database and tables:
+
+    python manage.py migrate    
+    
+Create superuser for admin:
+
+    python manage.py createsuperuser
+    
+Scrape recipes:
+
+    python manage.py scrape --urls
+    python manage.py scrape --images
+    python manage.py scrape --recipes
+    python manage.py scrape --ingest
+    
+Run web server:    
+    
+    python manage.py runserver
+    
+URL: http://localhost:8000
