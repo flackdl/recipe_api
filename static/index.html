@@ -9,6 +9,9 @@
 	<script defer src="https://use.fontawesome.com/releases/v5.3.1/js/all.js"></script>
 	<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.2.0/css/all.css">
 	<style>
+		.recipe .tag {
+			margin: 2px 0;
+		}
 		.recipe-image {
 			object-fit: cover;
 		}
@@ -110,6 +113,9 @@
 						There were no results found
 					</div>
 					<div class="section columns is-multiline">
+						<div class="column is-12 has-text-grey-light is-size-6" style="text-align: right">
+							<div v-if="searchResults.length > 0">{{ searchResultsCount }} results</div>
+						</div>
 						<div class="card column is-half-tablet is-one-third-desktop" v-for="recipe in searchResults" :key="recipe.slug">
 							<router-link :to="{path: '/recipe/' + recipe.slug}" class="has-text-dark">
 								<div class="card-image">
@@ -137,7 +143,7 @@
 
 	<!-- recipe header -->
 	<script type="text/x-template" id="recipe-header">
-		<div>
+		<div class="recipe">
 			<p class="title is-4">{{ recipe.name }}</p>
 			<div class="subtitle is-6">
 				<div><span class="tag is-light">Time</span> {{ recipe.total_time }} minutes</div>
@@ -246,6 +252,7 @@
 								categoriesChosen: [],
 								searchQuery: '',
 								searchResults: [],
+								searchResultsCount: 0,  // includes all pages
 								isLoading: false,
 								loadingComponent: null,
 								hasImage: true,
@@ -345,6 +352,7 @@
 									if (response.ok) {
 										response.json().then((data) => {
 											this.searchResults = data.results;
+											this.searchResultsCount = data.count;
 											this.isLoading = false;
 										})
 									} else {
