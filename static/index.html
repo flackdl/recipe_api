@@ -15,6 +15,9 @@
 		.recipe-image {
 			object-fit: cover;
 		}
+		.text-right {
+			text-align: right;
+		}
 	</style>
 </head>
 
@@ -38,7 +41,9 @@
 			</template>
 			<section class="section">
 				<div class="container">
-					<router-view></router-view>
+					<transition>
+						<router-view></router-view>
+					</transition>
 				</div>
 			</section>
 		</div>
@@ -96,7 +101,7 @@
 					<div class="field column">
 						<b-switch size="is-small" v-model="hasImage" @change.native="onSearch($event)">has image</b-switch>
 					</div>
-					<div class="column is-12" style="text-align: right">
+					<div class="column is-12 text-right">
 						<button class="button is-primary is-light is-large">Search</button>
 					</div>
 				</form>
@@ -109,14 +114,14 @@
 				</section>
 				<!-- search results -->
 				<div v-if="!isLoading">
-					<div v-if="searchResults.length === 0" class="notification is-warning">
+					<div v-if="searchResults && searchResults.results.length === 0" class="notification is-warning">
 						There were no results found
 					</div>
-					<div class="section columns is-multiline">
-						<div class="column is-12 has-text-grey-light is-size-6" style="text-align: right">
-							<div v-if="searchResults.length > 0">{{ searchResultsCount }} results</div>
+					<div class="section columns is-multiline" v-if="hasSearchResults()">
+						<div class="column is-12 has-text-grey-light is-size-6 text-right">
+							<div>{{ searchResults.count }} results</div>
 						</div>
-						<div class="card column is-half-tablet is-one-third-desktop" v-for="recipe in searchResults" :key="recipe.slug">
+						<div class="card column is-half-tablet is-one-third-desktop" v-for="recipe in searchResults.results" :key="recipe.slug">
 							<router-link :to="{path: '/recipe/' + recipe.slug}" class="has-text-dark">
 								<div class="card-image">
 									<figure class="image is-4by3">
@@ -133,6 +138,9 @@
 									<div class="content" v-html="recipe.description"></div>
 								</div>
 							</router-link>
+						</div>
+						<div class="column is-12 text-right" v-if="searchResults.next">
+							<button class="button is-info is-light is-large" @click="loadNextPage()">Next</button>
 						</div>
 					</div>
 				</div>
@@ -244,6 +252,7 @@
 						template: '#main',
 						data () {
 							return {
+								page: 1,
 								cuisines: [],
 								categories: [],
 								cuisinesFiltered: [],
@@ -251,21 +260,27 @@
 								cuisinesChosen: [],
 								categoriesChosen: [],
 								searchQuery: '',
-								searchResults: [],
-								searchResultsCount: 0,  // includes all pages
+								searchResults: null,
 								isLoading: false,
 								loadingComponent: null,
 								hasImage: true,
 							}
 						},
 						created () {
+							// initialize
+							this.searchQuery = this.$route.query.search || '';
+							this.page = parseInt(this.$route.query.page || 1);
+							document.title = 'Recipe DB';
+
+							// fetch core data
 							this.loadCoreData().subscribe(() => {
-								document.title = 'Recipe DB';
-								this.searchQuery = this.$route.query.search || '';
 								this.search();
 							});
 						},
 						methods: {
+							hasSearchResults() {
+								return this.searchResults && this.searchResults.results.length > 0;
+							},
 							cuisineAdded() {
 								// reset the cuisines choices
 								this.cuisinesFiltered = this.cuisines.slice();
@@ -318,26 +333,19 @@
 								this.loadingComponent.close();
 							},
 							onSearch (e) {
-
-								// blur the input so the keyboard disappears on mobile devices
-								document.querySelector('#search').blur();
-
-								// update the router params
-								this.$router.push({
-									name: 'main',
-									query: {
-										search: this.searchQuery,
-										cuisines: this.cuisinesChosen,
-										categories: this.categoriesChosen,
-									},
-								});
-
-								// perform the search
+								// reset page since it's a new search
+								this.page = 1;
 								this.search();
 								e.preventDefault();
 							},
 							search () {
 								this.isLoading = true;
+
+								// blur the input so the keyboard disappears on mobile devices
+								document.querySelector('#search').blur();
+
+								this.updateUrlParams();
+
 								// add cuisines and categories filter
 								let params = this.cuisinesChosen.map((cuisine) => {
 									return `cuisines=${cuisine.id}`;
@@ -348,13 +356,42 @@
 								if (this.hasImage) {
 									params = params.concat([`has_image=${this.hasImage}`]);
 								}
-								fetch(`/api/recipe/?search=${this.searchQuery}&${params.join('&')}`).then((response) => {
+								// add page filter
+								params = params.concat([`page=${this.page}`]);
+
+								// fetch recipes
+								this.fetchRecipes(`/api/recipe/?search=${this.searchQuery}&${params.join('&')}`).then(() => {
+									this.isLoading = false;
+								});
+							},
+							loadNextPage() {
+								this.page++;
+								this.isLoading = true;
+								this.updateUrlParams();
+								this.fetchRecipes(this.searchResults.next).then(() => {
+									this.isLoading = false;
+								});
+							},
+							updateUrlParams() {
+								// update the router params
+								this.$router.push({
+									name: 'main',
+									query: {
+										search: this.searchQuery,
+										// TODO - handle arrays in urls
+										//cuisines: this.cuisinesChosen,
+										//categories: this.categoriesChosen,
+										page: this.page,
+									},
+								}).catch(() => {});
+							},
+							fetchRecipes(url) {
+								// fetch recipes
+								return fetch(url).then((response) => {
 									if (response.ok) {
-										response.json().then((data) => {
-											this.searchResults = data.results;
-											this.searchResultsCount = data.count;
-											this.isLoading = false;
-										})
+										return response.json().then((data) => {
+											this.searchResults = data;
+										});
 									} else {
 										// TODO - show error
 									}
