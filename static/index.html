@@ -264,13 +264,22 @@
 								isLoading: false,
 								loadingComponent: null,
 								hasImage: true,
+								pageTitle: document.title,
 							}
+						},
+						beforeRouteUpdate (to, from, next) {
+							// react to route changes in the same component since the normal life cycle hooks aren't called
+							this.searchQuery = to.query.search || '';
+							this.page = to.query.page || 1;
+							this.search();
+							next();
 						},
 						created () {
 							// initialize
 							this.searchQuery = this.$route.query.search || '';
 							this.page = parseInt(this.$route.query.page || 1);
-							document.title = 'Recipe DB';
+							// reset page title
+							document.title = this.pageTitle;
 
 							// fetch core data
 							this.loadCoreData().subscribe(() => {
@@ -336,6 +345,7 @@
 								// reset page since it's a new search
 								this.page = 1;
 								this.search();
+								this.updateUrlParams();
 								e.preventDefault();
 							},
 							search () {
@@ -344,7 +354,30 @@
 								// blur the input so the keyboard disappears on mobile devices
 								document.querySelector('#search').blur();
 
+								// fetch recipes
+								this.fetchRecipes().then(() => {
+									this.isLoading = false;
+								});
+							},
+							loadNextPage() {
+								this.page++;
+								this.isLoading = true;
 								this.updateUrlParams();
+							},
+							updateUrlParams() {
+								// update the router query params
+								this.$router.push({
+									name: 'main',
+									query: {
+										search: this.searchQuery,
+										page: this.page,
+										// TODO - handle arrays in urls
+										//cuisines: this.cuisinesChosen,
+										//categories: this.categoriesChosen,
+									},
+								}).catch((e) => console.error(e));
+							},
+							fetchRecipes() {
 
 								// add cuisines and categories filter
 								let params = this.cuisinesChosen.map((cuisine) => {
@@ -359,33 +392,9 @@
 								// add page filter
 								params = params.concat([`page=${this.page}`]);
 
-								// fetch recipes
-								this.fetchRecipes(`/api/recipe/?search=${this.searchQuery}&${params.join('&')}`).then(() => {
-									this.isLoading = false;
-								});
-							},
-							loadNextPage() {
-								this.page++;
-								this.isLoading = true;
-								this.updateUrlParams();
-								this.fetchRecipes(this.searchResults.next).then(() => {
-									this.isLoading = false;
-								});
-							},
-							updateUrlParams() {
-								// update the router params
-								this.$router.push({
-									name: 'main',
-									query: {
-										search: this.searchQuery,
-										// TODO - handle arrays in urls
-										//cuisines: this.cuisinesChosen,
-										//categories: this.categoriesChosen,
-										page: this.page,
-									},
-								}).catch(() => {});
-							},
-							fetchRecipes(url) {
+								// construct url
+								const url = `/api/recipe/?search=${this.searchQuery}&${params.join('&')}`;
+
 								// fetch recipes
 								return fetch(url).then((response) => {
 									if (response.ok) {
@@ -407,7 +416,7 @@
 						created () {
 							fetch(`/api/recipe/?slug=${this.$route.params.slug}`).then((response) => {
 								response.json().then((data) => {
-									if (data.results.length) {
+									if (data.results.length > 0) {
 										this.recipe = data.results[0];
 										document.title = this.recipe.name;
 									}
