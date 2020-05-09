@@ -139,6 +139,13 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 30,
 }
 
+# https://docs.djangoproject.com/en/3.0/topics/cache/
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
+        'LOCATION': 'cache',
+    }
+}
 
 LOGGING = {
     "version": 1,
