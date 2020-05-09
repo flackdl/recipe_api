@@ -1,3 +1,4 @@
+import errno
 import os
 import re
 import shutil
@@ -14,10 +15,11 @@ from django.core.management.base import BaseCommand, CommandError
 from recipe_api.settings import POSTGRES_LANGUAGE_UNACCENT
 from recipes.models import Recipe, Category, Cuisine
 
+CACHE_DIR = '/tmp/recipes'
+
 
 class Command(BaseCommand):
     help = 'Scrape NYT recipes'
-    pages = 422
 
     def add_arguments(self, parser):
         parser.add_argument('--urls', action='store_true', help='Captures all recipe urls')
@@ -139,6 +141,13 @@ class Command(BaseCommand):
             self.stdout.write(self.style.ERROR('"urls.json" does not exist.  Run with --urls first'))
             sys.exit(1)
 
+        # create cache dir if it doesn't exist
+        try:
+            os.makedirs(CACHE_DIR)
+        except OSError as e:
+            if e.errno != errno.EEXIST:
+                raise
+
         self.stdout.write(self.style.SUCCESS('Scraping recipes'))
 
         recipes = []
@@ -146,7 +155,7 @@ class Command(BaseCommand):
 
         for i, url in enumerate(json.load(open(urls_file, 'r'))['urls']):
 
-            cache_path = os.path.join('/tmp/recipes/', os.path.basename(url))
+            cache_path = os.path.join(CACHE_DIR, os.path.basename(url))
 
             # use cache if it exists
             if os.path.exists(cache_path):
@@ -192,16 +201,22 @@ class Command(BaseCommand):
 
         recipe_urls = []
 
-        for page in range(1, self.pages + 1):
+        page = 1
+
+        while True:
             url = 'https://cooking.nytimes.com/search?page={page}'.format(page=page)
             response = requests.get(url)
             data = response.content
             html = etree.HTML(data)
             articles = html.xpath('//article')
             self.stdout.write(self.style.SUCCESS('Fetched {} with {} recipes'.format(url, len(articles))))
-            for article in articles:
-                url = article.attrib['data-url']
-                recipe_urls.append(url)
+            if articles:
+                for article in articles:
+                    url = article.attrib['data-url']
+                    recipe_urls.append(url)
+            else:  # no more pages
+                break
+            page += 1
 
         # save output as json file
         json.dump({'urls': recipe_urls}, open('urls.json', 'w'))
