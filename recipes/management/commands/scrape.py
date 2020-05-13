@@ -56,8 +56,7 @@ class Command(BaseCommand):
             abs_image_path = os.path.join(settings.BASE_DIR, rel_image_path)
             image_url = '/' + rel_image_path if os.path.exists(abs_image_path) else None
 
-            # TODO - add detail viewset to get recipe by slug vs id
-            # update external recipe urls to internal ones
+            # TODO - update external recipe urls to internal ones
             #description = re.sub(r'https://cooking.nytimes.com/recipes/', '#/recipe/', recipe['description'] or '')
             description = recipe['description']
 
@@ -111,6 +110,11 @@ class Command(BaseCommand):
 
         recipes = json.load(open(recipe_file))
         for i, recipe in enumerate(recipes['recipes']):
+
+            # skip if we already have this recipe imported
+            if self._recipe_exists(slug=recipe['slug']):
+                continue
+
             try:
                 response = requests.get(recipe['image'], stream=True)
                 response.raise_for_status()
@@ -155,6 +159,11 @@ class Command(BaseCommand):
 
         for i, url in enumerate(json.load(open(urls_file, 'r'))['urls']):
 
+            # skip if we already have this recipe imported
+            slug = os.path.basename(url)
+            if self._recipe_exists(slug=slug):
+                continue
+
             cache_path = os.path.join(CACHE_DIR, os.path.basename(url))
 
             # use cache if it exists
@@ -195,7 +204,7 @@ class Command(BaseCommand):
             recipes.append(recipe_data)
 
         json.dump({'recipes': recipes}, open('recipes.json', 'w'), ensure_ascii=False)
-        self.stdout.write(self.style.SUCCESS('Complete'))
+        self.stdout.write(self.style.SUCCESS('Collected {} recipes'.format(len(recipes))))
 
     def _scrape_urls(self):
 
@@ -231,3 +240,6 @@ class Command(BaseCommand):
             sys.exit(1)
 
         return urls_file
+
+    def _recipe_exists(self, slug):
+        return Recipe.objects.filter(slug=slug).exists()
