@@ -35,7 +35,7 @@
 					</template>
 					<template slot="start">
 						<b-navbar-item tag="router-link" to="/api">
-							API
+							About
 						</b-navbar-item>
 					</template>
 				</b-navbar>
@@ -57,7 +57,7 @@
 				<div class="hero-body">
 					<div class="container">
 						<h1 class="title">Recipe Database</h1>
-						<h2 class="subtitle">A recipe <strong>database</strong> with <strong>api</strong> access</h2>
+						<h2 class="subtitle">A recipe <strong>database</strong> with <router-link to="api" class="has-text-dark"><u><strong>api</strong></u></router-link> access</h2>
 					</div>
 				</div>
 			</section>
@@ -199,7 +199,11 @@
 						</div>
 						<div class="column is-6">
 							<h2>Instructions</h2>
-							<li v-for="instruction in recipe.instructions">{{ instruction }}</li>
+							<div class="content">
+								<ol type="1">
+									<li v-for="instruction in recipe.instructions">{{ instruction }}</li>
+								</ol>
+							</div>
 						</div>
 					</div>
 				</div>
@@ -216,7 +220,7 @@
 						Recipe API
 					</h1>
 					<h2 class="subtitle">
-						The recipe database is powered by a public REST API.  The source code is open source.
+						The recipe database is powered by a public REST API.  The code is open source.
 					</h2>
 					<div class="content">
 						<ul>
@@ -433,12 +437,14 @@
 					component: {
 						template: '#recipe',
 						created () {
+							this.showLoading();
 							fetch(`/api/recipe/?slug=${this.$route.params.slug}`).then((response) => {
 								response.json().then((data) => {
 									if (data.results.length > 0) {
 										this.recipe = data.results[0];
 										document.title = this.recipe.name;
 									}
+									this.hideLoading();
 								})
 							})
 						},
@@ -448,6 +454,12 @@
 							}
 						},
 						methods: {
+							showLoading() {
+								this.loadingComponent = this.$buefy.loading.open();
+							},
+							hideLoading () {
+								this.loadingComponent.close();
+							},
 						}
 					},
 				},
