@@ -278,22 +278,37 @@
 							// react to route changes in the same component since the normal life cycle hooks aren't called
 							this.searchQuery = to.query.search || '';
 							this.page = to.query.page || 1;
+							this.categoriesChosen = this.filterObjectsFromIds(to.query.categories || [], this.categories);
+							this.cuisinesChosen = this.filterObjectsFromIds(to.query.cuisines || [], this.cuisines);
 							this.search();
 							next();
 						},
 						created () {
-							// initialize
-							this.searchQuery = this.$route.query.search || '';
-							this.page = parseInt(this.$route.query.page || 1);
+
 							// reset page title
 							document.title = this.pageTitle;
 
 							// fetch core data
 							this.loadCoreData().subscribe(() => {
+
+								// initialize form state from query params
+								this.searchQuery = this.$route.query.search || '';
+								this.page = parseInt(this.$route.query.page || 1);
+								this.categoriesChosen = this.filterObjectsFromIds(this.$route.query.categories || [], this.categories);
+								this.cuisinesChosen = this.filterObjectsFromIds(this.$route.query.cuisines || [], this.cuisines);
+
+								// search
 								this.search();
 							});
 						},
 						methods: {
+							filterObjectsFromIds(ids, objects) {
+								// coerce a list
+								ids = Array.isArray(ids) ? ids : [ids];
+								return objects.filter((object) => {
+									return ids.includes(String(object.id));
+								});
+							},
 							hasSearchResults() {
 								return this.searchResults && this.searchResults.results.length > 0;
 							},
@@ -373,20 +388,28 @@
 							},
 							updateUrlParams() {
 								// update the router query params
-								this.$router.push({
-									name: 'main',
-									query: {
-										search: this.searchQuery,
-										page: this.page,
-										// TODO - handle arrays in urls
-										//cuisines: this.cuisinesChosen,
-										//categories: this.categoriesChosen,
-									},
-								}).catch((e) => console.error(e));
+								this.$router.push(`?${this.getSearchUrlParams()}`)
+									.catch((e) => console.error(e));
 							},
 							fetchRecipes() {
 
-								// add cuisines and categories filter
+								const params = this.getSearchUrlParams();
+
+								// construct url
+								const url = `/api/recipe/${params}`;
+
+								// fetch recipes
+								return fetch(url).then((response) => {
+									if (response.ok) {
+										return response.json().then((data) => {
+											this.searchResults = data;
+										});
+									} else {
+										// TODO - show error
+									}
+								});
+							},
+							getSearchUrlParams() {
 								let params = this.cuisinesChosen.map((cuisine) => {
 									return `cuisines=${cuisine.id}`;
 								}).concat(this.categoriesChosen.map((category) => {
@@ -399,19 +422,8 @@
 								// add page filter
 								params = params.concat([`page=${this.page}`]);
 
-								// construct url
-								const url = `/api/recipe/?search=${this.searchQuery}&${params.join('&')}`;
-
-								// fetch recipes
-								return fetch(url).then((response) => {
-									if (response.ok) {
-										return response.json().then((data) => {
-											this.searchResults = data;
-										});
-									} else {
-										// TODO - show error
-									}
-								});
+								// return url params
+								return `?search=${this.searchQuery}&${params.join('&')}`;
 							},
 						}
 					}
