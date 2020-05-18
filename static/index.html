@@ -112,15 +112,12 @@
 						<button class="button is-primary is-light is-large">Search</button>
 					</div>
 				</form>
-				<!-- search results loading -->
-				<section v-if="isLoading">
-					<b-skeleton width="20%" :animated="true"></b-skeleton>
-					<b-skeleton width="40%" :animated="true"></b-skeleton>
-					<b-skeleton width="80%" :animated="true"></b-skeleton>
-					<b-skeleton :animated="true"></b-skeleton>
-				</section>
+
+				<!-- loading skeleton -->
+				<loading-skeleton v-if="isContentLoading"></loading-skeleton>
+
 				<!-- search results -->
-				<div v-if="!isLoading">
+				<div v-if="!isContentLoading">
 					<div v-if="searchResults && searchResults.results.length === 0" class="notification is-warning">
 						There were no results found
 					</div>
@@ -155,6 +152,15 @@
 		</div>
 	</script>
 
+	<!-- loading skeleton -->
+	<script type="text/x-template" id="loading-skeleton">
+		<section>
+			<b-skeleton width="20%" :animated="true"></b-skeleton>
+			<b-skeleton width="40%" :animated="true"></b-skeleton>
+			<b-skeleton width="80%" :animated="true"></b-skeleton>
+			<b-skeleton :animated="true"></b-skeleton>
+		</section>
+	</script>
 
 	<!-- recipe header -->
 	<script type="text/x-template" id="recipe-header">
@@ -176,33 +182,37 @@
 
 	<!-- recipe -->
 	<script type="text/x-template" id="recipe">
-		<div v-if="recipe" class="card">
-			<div class="card-content">
-				<div class="media">
-					<div class="media-content">
-						<recipe-header :recipe="recipe"></recipe-header>
-					</div>
-				</div>
-				<div class="content">
-					<div class="columns">
-						<div class="column" v-html="recipe.description"></div>
-						<div class="column">
-							<figure class="image">
-								<img :src="recipe.image_path">
-							</figure>
+		<div>
+			<loading-skeleton v-if="isContentLoading"></loading-skeleton>
+			<div v-if="!isContentLoading" class="card">
+				<div class="card-content">
+					<div class="media">
+						<div class="media-content">
+							<recipe-header :recipe="recipe"></recipe-header>
+							<a :href="tag.link" v-for="tag in getTags()" class="tag is-link is-light is-rounded">{{ tag.label }}</a>
 						</div>
 					</div>
-					<div class="columns">
-						<div class="column is-6">
+					<div class="content">
+						<div class="columns">
+							<div class="column" v-html="recipe.description"></div>
+							<div class="column">
+								<figure class="image">
+									<img :src="recipe.image_path">
+								</figure>
+							</div>
+						</div>
+						<div class="columns">
+							<div class="column is-6">
 								<h2>Ingredients</h2>
 								<li v-for="ingredient in recipe.ingredients">{{ ingredient }}</li>
-						</div>
-						<div class="column is-6">
-							<h2>Instructions</h2>
-							<div class="content">
-								<ol type="1">
-									<li v-for="instruction in recipe.instructions">{{ instruction }}</li>
-								</ol>
+							</div>
+							<div class="column is-6">
+								<h2>Instructions</h2>
+								<div class="content">
+									<ol type="1">
+										<li v-for="instruction in recipe.instructions">{{ instruction }}</li>
+									</ol>
+								</div>
 							</div>
 						</div>
 					</div>
@@ -243,6 +253,46 @@
 <script src="https://unpkg.com/vue-router@3.1.6/dist/vue-router.js"></script>
 
 <script>
+	let coreMixin = {
+		data() {
+			return {
+				cuisines: [],
+				categories: [],
+				loadingComponent: null,
+				isContentLoading: true,
+			}
+		},
+		methods: {
+			showLoading() {
+				this.loadingComponent = this.$buefy.loading.open();
+			},
+			hideLoading () {
+				this.loadingComponent.close();
+			},
+			loadCoreData() {
+				return rxjs.forkJoin({
+					'categories': rxjs.ajax.ajax.getJSON('/api/category/').pipe(
+						rxjs.operators.map((data) => {
+							this.categories = data.results;
+							return this.categories;
+						}),
+					),
+					'cuisines': rxjs.ajax.ajax.getJSON('/api/cuisine/').pipe(
+						rxjs.operators.map((data) => {
+							this.cuisines = data.results;
+							return this.cuisines;
+						}),
+					),
+				});
+			},
+		}
+	}
+
+	// loading skeleton
+	Vue.component('loading-skeleton', {
+		template: '#loading-skeleton',
+	});
+
 	// recipe header component
 	Vue.component('recipe-header', {
 		props: ['recipe'],
@@ -252,28 +302,27 @@
 		},
 		template: '#recipe-header',
 	});
+
 	// main app
 	let app = new Vue({
 		el: '#app',
+		mixins: [coreMixin],
 		router: new VueRouter({
 			routes: [
 				{ path: '/',
 					name: 'main',
 					component: {
 						template: '#main',
+						mixins: [coreMixin],
 						data () {
 							return {
 								page: 1,
-								cuisines: [],
-								categories: [],
 								cuisinesFiltered: [],
 								categoriesFiltered: [],
 								cuisinesChosen: [],
 								categoriesChosen: [],
 								searchQuery: '',
 								searchResults: null,
-								isLoading: false,
-								loadingComponent: null,
 								hasImage: true,
 								pageTitle: document.title,
 							}
@@ -292,8 +341,15 @@
 							// reset page title
 							document.title = this.pageTitle;
 
+							this.showLoading();
+
 							// fetch core data
-							this.loadCoreData().subscribe(() => {
+							this.loadCoreData().subscribe((data) => {
+								this.hideLoading();
+
+								// make copies of the filterable categories and cuisines
+								this.categoriesFiltered = data.categories ? data.categories.slice() : [];
+								this.cuisinesFiltered = data.cuisines ? data.cuisines.slice() : [];
 
 								// initialize form state from query params
 								this.searchQuery = this.$route.query.search || '';
@@ -338,35 +394,6 @@
 										.indexOf(text.toLowerCase()) >= 0
 								})
 							},
-							loadCoreData() {
-								this.showLoading();
-								return rxjs.forkJoin({
-									'categories': rxjs.ajax.ajax.getJSON('/api/category/').pipe(
-										rxjs.operators.map((data) => {
-											this.categories = data.results;
-											this.categoriesFiltered = this.categories.slice();
-											return this.categories;
-										}),
-									),
-									'cuisines': rxjs.ajax.ajax.getJSON('/api/cuisine/').pipe(
-										rxjs.operators.map((data) => {
-											this.cuisines = data.results;
-											this.cuisinesFiltered = this.cuisines.slice();
-											return this.cuisines;
-										}),
-									),
-								}).pipe(
-									rxjs.operators.tap(() => {
-										this.hideLoading();
-									})
-								);
-							},
-							showLoading() {
-								this.loadingComponent = this.$buefy.loading.open();
-							},
-							hideLoading () {
-								this.loadingComponent.close();
-							},
 							onSearch (e) {
 								// reset page since it's a new search
 								this.page = 1;
@@ -375,19 +402,19 @@
 								e.preventDefault();
 							},
 							search () {
-								this.isLoading = true;
+								this.isContentLoading = true;
 
 								// blur the input so the keyboard disappears on mobile devices
 								document.querySelector('#search').blur();
 
 								// fetch recipes
 								this.fetchRecipes().then(() => {
-									this.isLoading = false;
+									this.isContentLoading = false;
 								});
 							},
 							loadNextPage() {
 								this.page++;
-								this.isLoading = true;
+								this.isContentLoading = true;
 								this.updateUrlParams();
 							},
 							updateUrlParams() {
@@ -409,7 +436,7 @@
 											this.searchResults = data;
 										});
 									} else {
-										// TODO - show error
+										console.error(response);
 									}
 								});
 							},
@@ -436,15 +463,25 @@
 					name: 'recipe',
 					component: {
 						template: '#recipe',
+						mixins: [coreMixin],
 						created () {
-							this.showLoading();
+
+							// load core data
+							this.loadCoreData().subscribe(() => {
+							}, (error) => {
+								console.error(error);
+							});
+
+							this.isContentLoading = true;
+
+							// fetch recipe
 							fetch(`/api/recipe/?slug=${this.$route.params.slug}`).then((response) => {
 								response.json().then((data) => {
+									this.isContentLoading = false;
 									if (data.results.length > 0) {
 										this.recipe = data.results[0];
 										document.title = this.recipe.name;
 									}
-									this.hideLoading();
 								})
 							})
 						},
@@ -454,11 +491,22 @@
 							}
 						},
 						methods: {
-							showLoading() {
-								this.loadingComponent = this.$buefy.loading.open();
-							},
-							hideLoading () {
-								this.loadingComponent.close();
+							getTags() {
+								return this.categories.filter((category) => {
+									return this.recipe.categories.includes(category.id);
+								}).map((object) => {
+									return {
+										label: object.name,
+										link: `#/?categories=${object.id}`,
+									};
+								}).concat(this.cuisines.filter((cuisine) => {
+									return this.recipe.cuisines.includes(cuisine.id);
+								}).map((object) => {
+									return {
+										label: object.name,
+										link: `#/?cuisines=${object.id}`,
+									};
+								}));
 							},
 						}
 					},
