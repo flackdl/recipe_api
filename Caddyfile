@@ -1,0 +1,11 @@
+{
+    admin off
+}
+
+:443 {
+    reverse_proxy localhost:80
+}
+
+:8080 {
+    redir https://recipes.crabdance.com
+}
