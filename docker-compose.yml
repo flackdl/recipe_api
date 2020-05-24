@@ -2,16 +2,28 @@ version: '2.2'
 
 services:
 
+  caddy:
+    image: caddy:2.0.0
+    ports:
+      - "443:443"
+      - "8080:8080"
+    volumes:
+      - caddy:/data
+      - ./Caddyfile:/config/Caddyfile
+
   recipes:
     build: .
     environment:
       DATABASE_URL: postgres://postgres:${DB_PASSWORD:-postgres}@postgres:5432/postgres
-    ports:
-      - "8080:80"
+    expose:
+      - 80
+    depends_on:
+      - caddy
+      - postgres
 
   postgres:
     image: postgres:11
-    # TODO - use "expose"
+    # NOTE: use "expose" in production
     ports:
       - "5432:5432"
     environment:
@@ -21,3 +33,4 @@ services:
 
 volumes:
   postgres:
+  caddy:
