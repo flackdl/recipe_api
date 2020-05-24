@@ -2,10 +2,11 @@
     admin off
 }
 
-:443 {
-    reverse_proxy localhost:80
+recipes.crabdance.com:443 {
+    reverse_proxy recipes:80
 }
 
+# old port now redirecting
 :8080 {
-    redir https://recipes.crabdance.com
+    redir https://recipes.crabdance.com permanent
 }

@@ -5,11 +5,13 @@ services:
   caddy:
     image: caddy:2.0.0
     ports:
+      - "80:80"
       - "443:443"
+      # expose old 8080 port to redirect to ssl
       - "8080:8080"
     volumes:
       - caddy:/data
-      - ./Caddyfile:/config/Caddyfile
+      - $PWD/Caddyfile:/etc/caddy/Caddyfile
 
   recipes:
     build: .
