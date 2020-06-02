@@ -109,7 +109,7 @@
 						<b-switch size="is-small" v-model="hasImage" @change.native="onSearch($event)">has image</b-switch>
 					</div>
 					<div class="column is-12 text-right">
-						<button class="button is-primary is-light is-large">Search</button>
+						<b-button native-type="submit" type="is-primary" size="is-large" :loading="isContentLoading">Search</b-button>
 					</div>
 				</form>
 
