@@ -24,13 +24,7 @@ services:
       - postgres
     labels:
       # routinely update recipes
-      deck-chores.update-recipes.command: >
-        python manage.py scrape --urls &&
-        python manage.py scrape --images &&
-        python manage.py scrape --recipes &&
-        python manage.py scrape --ingest &&
-        python manage.py shell -c "from django.core.cache import cache; cache.clear()" &&
-        echo "Done."
+      deck-chores.update-recipes.command: python manage.py scrape --all
       deck-chores.update-recipes.interval: "weekly"
 
   postgres:

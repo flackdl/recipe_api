@@ -11,6 +11,7 @@ from lxml import etree
 from django.conf import settings
 from django.contrib.postgres.search import SearchVector
 from django.core.management.base import BaseCommand, CommandError
+from django.core.cache import cache
 
 from recipe_api.settings import POSTGRES_LANGUAGE_UNACCENT
 from recipes.models import Recipe, Category, Cuisine
@@ -26,6 +27,7 @@ class Command(BaseCommand):
         parser.add_argument('--recipes', action='store_true', help='Captures all recipes')
         parser.add_argument('--images', action='store_true', help='Downloads all recipe images')
         parser.add_argument('--ingest', action='store_true', help='Ingests recipes into db')
+        parser.add_argument('--all', action='store_true', help='Scrapes and ingests everything')
 
     def handle(self, *args, **options):
 
@@ -41,6 +43,12 @@ class Command(BaseCommand):
             self._scrape_images()
         elif options['ingest']:
             self._ingest_recipes()
+        elif options['all']:
+            self._scrape_urls()
+            self._scrape_recipes()
+            self._scrape_images()
+            self._ingest_recipes()
+            cache.clear()
 
     def _ingest_recipes(self):
 
