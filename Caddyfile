@@ -3,10 +3,11 @@
 }
 
 recipes.crabdance.com:443 {
+    file_server /static/*
     reverse_proxy recipes:80
 }
 
-# old port now redirecting
+# redirect old app port
 :8080 {
     redir https://recipes.crabdance.com permanent
 }

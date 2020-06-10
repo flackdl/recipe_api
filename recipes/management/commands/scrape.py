@@ -51,7 +51,7 @@ class Command(BaseCommand):
             self._ingest_recipes()
             # clear cache and collect static files for new recipe images
             cache.clear()
-            call_command('collectstatic', verbosity=0, interactive=False)
+            call_command('collectstatic', interactive=False)
 
     def _ingest_recipes(self):
 
@@ -114,7 +114,7 @@ class Command(BaseCommand):
         vector = SearchVector('name', weight='A', config=POSTGRES_LANGUAGE_UNACCENT) + SearchVector('ingredients', weight='B', config=POSTGRES_LANGUAGE_UNACCENT)
         Recipe.objects.update(search_vector=vector)
 
-        self.stdout.write(self.style.SUCCESS('Complete'))
+        self.stdout.write(self.style.SUCCESS('Completed recipes'))
 
     def _scrape_images(self):
         recipe_file = self._validate_recipes_json_file()
@@ -145,7 +145,7 @@ class Command(BaseCommand):
             if i != 0 and i % 100 == 0:
                 self.stdout.write(self.style.SUCCESS('Downloaded {} images'.format(i)))
 
-        self.stdout.write(self.style.SUCCESS('Complete'))
+        self.stdout.write(self.style.SUCCESS('Completed images'))
 
     def _scrape_recipes(self):
 
@@ -240,7 +240,7 @@ class Command(BaseCommand):
 
         # save output as json file
         json.dump({'urls': recipe_urls}, open('urls.json', 'w'))
-        self.stdout.write(self.style.SUCCESS('Complete'))
+        self.stdout.write(self.style.SUCCESS('Completed urls'))
 
     def _validate_recipes_json_file(self):
         urls_file = os.path.join(settings.BASE_DIR, 'recipes.json')

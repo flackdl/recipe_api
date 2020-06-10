@@ -7,16 +7,19 @@ services:
     ports:
       - "80:80"
       - "443:443"
-      # expose old 8080 port to redirect to ssl
+      # redirect old app to ssl
       - "8080:8080"
     volumes:
       - caddy:/data
       - $PWD/Caddyfile:/etc/caddy/Caddyfile
+      - $PWD/staticfiles/:/static
 
   recipes:
     build: .
     environment:
       DATABASE_URL: postgres://postgres:${DB_PASSWORD:-postgres}@postgres:5432/postgres
+    volumes:
+      - $PWD:/app
     expose:
       - 80
     depends_on:
