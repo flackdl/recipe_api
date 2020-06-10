@@ -6,6 +6,7 @@ import sys
 import json
 import logging
 import requests
+from django.core.management import call_command
 from django.utils.dateparse import parse_duration
 from lxml import etree
 from django.conf import settings
@@ -48,7 +49,9 @@ class Command(BaseCommand):
             self._scrape_recipes()
             self._scrape_images()
             self._ingest_recipes()
+            # clear cache and collect static files for new recipe images
             cache.clear()
+            call_command('collectstatic', verbosity=0, interactive=False)
 
     def _ingest_recipes(self):
 
