@@ -32,7 +32,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
 
         # validate args
-        if not any([options['urls'], options['recipes'], options['images'], options['ingest']]):
+        if not any([options['urls'], options['recipes'], options['images'], options['ingest'], options['all']]):
             raise CommandError('Missing argument')
 
         if options['urls']:
