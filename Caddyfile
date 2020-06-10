@@ -3,7 +3,7 @@
 }
 
 recipes.crabdance.com:443 {
-    file_server /static/*
+    #file_server /static/*
     reverse_proxy recipes:80
 }
 

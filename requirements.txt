@@ -7,3 +7,4 @@ djangorestframework==3.11.0
 Markdown==3.2.1
 django-filter==2.2.0
 gunicorn==20.0.4
+whitenoise==5.0.1
