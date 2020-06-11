@@ -12,7 +12,7 @@ services:
     volumes:
       - caddy:/data
       - $PWD/Caddyfile:/etc/caddy/Caddyfile
-      - $PWD/staticfiles/:/static
+      - $PWD/staticfiles/:/app/static/
 
   recipes:
     build: .
