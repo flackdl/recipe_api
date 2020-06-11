@@ -22,36 +22,36 @@ CACHE_DIR = '/tmp/recipes'
 
 class Command(BaseCommand):
     help = 'Scrape NYT recipes'
+    force = False
 
     def add_arguments(self, parser):
         parser.add_argument('--urls', action='store_true', help='Captures all recipe urls')
         parser.add_argument('--recipes', action='store_true', help='Captures all recipes')
         parser.add_argument('--images', action='store_true', help='Downloads all recipe images')
         parser.add_argument('--ingest', action='store_true', help='Ingests recipes into db')
-        parser.add_argument('--all', action='store_true', help='Scrapes and ingests everything')
+        parser.add_argument('--force', action='store_true', help='Forces an update')
 
     def handle(self, *args, **options):
 
-        # validate args
-        if not any([options['urls'], options['recipes'], options['images'], options['ingest'], options['all']]):
+        self.force = options['force']
+
+        # validate required args
+        if not any([options['urls'], options['recipes'], options['images'], options['ingest']]):
             raise CommandError('Missing argument')
 
         if options['urls']:
             self._scrape_urls()
-        elif options['recipes']:
+        if options['recipes']:
             self._scrape_recipes()
-        elif options['images']:
+        if options['images']:
             self._scrape_images()
-        elif options['ingest']:
-            self._ingest_recipes()
-        elif options['all']:
-            self._scrape_urls()
-            self._scrape_recipes()
-            self._scrape_images()
-            self._ingest_recipes()
-            # clear cache and collect static files for new recipe images
-            cache.clear()
+            # collect static files since we scraped new images
             call_command('collectstatic', interactive=False)
+        if options['ingest']:
+            self._ingest_recipes()
+
+        # clear cache
+        cache.clear()
 
     def _ingest_recipes(self):
 
@@ -123,7 +123,7 @@ class Command(BaseCommand):
         for i, recipe in enumerate(recipes['recipes']):
 
             # skip if we already have this recipe imported
-            if self._recipe_exists(slug=recipe['slug']):
+            if not self.force and self._recipe_exists(slug=recipe['slug']):
                 continue
 
             try:
@@ -172,7 +172,7 @@ class Command(BaseCommand):
 
             # skip if we already have this recipe imported
             slug = os.path.basename(url)
-            if self._recipe_exists(slug=slug):
+            if not self.force and self._recipe_exists(slug=slug):
                 continue
 
             cache_path = os.path.join(CACHE_DIR, os.path.basename(url))
