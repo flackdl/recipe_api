@@ -27,8 +27,10 @@ services:
       - postgres
     labels:
       # routinely update recipes
+      deck-chores.new-recipes.command: python manage.py scrape --urls --recipes --images --ingest
+      deck-chores.new-recipes.interval: "weekly"
       deck-chores.update-recipes.command: python manage.py scrape --urls --recipes --images --ingest --force
-      deck-chores.update-recipes.interval: "weekly"
+      deck-chores.update-recipes.interval: "monthly"
 
   postgres:
     image: postgres:11
