@@ -11,6 +11,7 @@ recipes.crabdance.com:443 {
         root /static/* /app/
         file_server /static/*
         reverse_proxy recipes:80
+        header / X-Robots-Tag: noindex
     }
 }
 
