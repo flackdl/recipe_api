@@ -20,15 +20,17 @@ services:
       DATABASE_URL: postgres://postgres:${DB_PASSWORD:-postgres}@postgres:5432/postgres
     volumes:
       - $PWD:/app
+      - recipes-cache:/tmp/recipes
     expose:
       - 80
     depends_on:
       - caddy
       - postgres
     labels:
-      # routinely update recipes
+      # routinely check for new recipes
       deck-chores.new-recipes.command: python manage.py scrape --urls --recipes --images --ingest
       deck-chores.new-recipes.interval: "weekly"
+      # update all recipes less frequently
       deck-chores.update-recipes.command: python manage.py scrape --urls --recipes --images --ingest --force
       deck-chores.update-recipes.interval: "monthly"
 
@@ -54,3 +56,4 @@ services:
 volumes:
   postgres:
   caddy:
+  recipes-cache:

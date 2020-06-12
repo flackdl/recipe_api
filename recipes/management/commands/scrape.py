@@ -53,107 +53,34 @@ class Command(BaseCommand):
         # clear cache
         cache.clear()
 
-    def _ingest_recipes(self):
+    def _scrape_urls(self):
 
-        # retrieve and validate recipe file
-        recipe_file = self._validate_recipes_json_file()
-        recipes = json.load(open(recipe_file))
+        recipe_urls = []
 
-        # import
-        for i, recipe in enumerate(recipes['recipes']):
+        page = 1
 
-            # set image path if it exists
-            rel_image_path = os.path.join('static', 'recipes', '{}.jpg'.format(recipe['slug']))
-            abs_image_path = os.path.join(settings.BASE_DIR, rel_image_path)
-            image_url = '/' + rel_image_path if os.path.exists(abs_image_path) else None
+        while True:
+            url = 'https://cooking.nytimes.com/search?page={page}'.format(page=page)
+            response = requests.get(url)
+            data = response.content
+            html = etree.HTML(data)
+            articles = html.xpath('//article')
+            self.stdout.write(self.style.SUCCESS('Fetched {} with {} recipes'.format(url, len(articles))))
+            if articles:
+                for article in articles:
+                    url = article.attrib['data-url']
+                    recipe_urls.append(url)
+            else:  # no more pages
+                break
+            page += 1
 
-            # TODO - update external recipe urls to internal ones
-            #description = re.sub(r'https://cooking.nytimes.com/recipes/', '#/recipe/', recipe['description'] or '')
-            description = recipe['description']
-
-            # create recipe
-            recipe_obj, _ = Recipe.objects.update_or_create(
-                slug=recipe['slug'],
-                defaults=dict(
-                    name=recipe['name'],
-                    image_path=image_url,
-                    description=description,
-                    # parse duration like "PT45M" to 45 minutes
-                    total_time=parse_duration(recipe['totalTime']).seconds / 60 if 'totalTime' in recipe else None,
-                    servings=recipe['recipeYield'],
-                    rating_value=recipe['aggregateRating']['ratingValue'] if recipe['aggregateRating'] else None,
-                    rating_count=recipe['aggregateRating']['ratingCount'] if recipe['aggregateRating'] else None,
-                    ingredients=recipe['recipeIngredient'],
-                    instructions=[x['text'] for x in recipe['recipeInstructions'] or [] if 'text' in x],
-                    author=recipe['author']['name'],
-                )
-            )
-
-            # assign categories (they're csv strings)
-            categories = recipe['recipeCategory'].split(',')
-            for category in categories:
-                if not category:
-                    continue
-                cat_obj, _ = Category.objects.get_or_create(name=category.strip())
-                recipe_obj.categories.add(cat_obj)
-                recipe_obj.save()
-
-            # assign cuisines (they're csv strings)
-            cuisines = recipe['recipeCuisine'].split(',')
-            for cuisine in cuisines:
-                if not cuisine:
-                    continue
-                cuisine_obj, _ = Cuisine.objects.get_or_create(name=cuisine.strip())
-                recipe_obj.cuisines.add(cuisine_obj)
-                recipe_obj.save()
-
-            if i != 0 and i % 100 == 0:
-                self.stdout.write(self.style.SUCCESS('Ingested {} recipes'.format(i)))
-
-        # add search vector
-        vector = SearchVector('name', weight='A', config=POSTGRES_LANGUAGE_UNACCENT) + SearchVector('ingredients', weight='B', config=POSTGRES_LANGUAGE_UNACCENT)
-        Recipe.objects.update(search_vector=vector)
-
-        self.stdout.write(self.style.SUCCESS('Completed recipes'))
-
-    def _scrape_images(self):
-        recipe_file = self._validate_recipes_json_file()
-
-        recipes = json.load(open(recipe_file))
-        for i, recipe in enumerate(recipes['recipes']):
-
-            # skip placeholder images
-            if self._is_placeholder_image(recipe['image']):
-                continue
-
-            # skip recipes we've already imported
-            if not self.force and self._recipe_exists(slug=recipe['slug']):
-                continue
-
-            try:
-                response = requests.get(recipe['image'], stream=True)
-                response.raise_for_status()
-            except Exception as e:
-                logging.exception(e)
-                self.stdout.write(self.style.ERROR('Could not download image {} for {}'.format(recipe['image'], recipe['name'])))
-                continue
-            # use image extension for new name based on slug
-            extension_match = re.match(r'.*(\.\w{3})$', os.path.basename(recipe['image']))
-            if extension_match:
-                extension = extension_match.groups()[0]
-            else:
-                extension = '.jpg'
-            image_name = '{}{}'.format(recipe['slug'], extension)
-            with open(os.path.join('static/recipes', image_name), 'wb') as out_file:
-                shutil.copyfileobj(response.raw, out_file)
-            if i != 0 and i % 100 == 0:
-                self.stdout.write(self.style.SUCCESS('Downloaded {} images'.format(i)))
-
-        self.stdout.write(self.style.SUCCESS('Completed images'))
+        # save output as json file
+        json.dump({'urls': recipe_urls}, open(os.path.join(CACHE_DIR, 'urls.json'), 'w'))
+        self.stdout.write(self.style.SUCCESS('Completed urls'))
 
     def _scrape_recipes(self):
 
-        urls_file = os.path.join(settings.BASE_DIR, 'urls.json')
+        urls_file = os.path.join(CACHE_DIR, 'urls.json')
 
         # validate the input urls file
         if not os.path.exists(urls_file):
@@ -218,36 +145,113 @@ class Command(BaseCommand):
 
             recipes.append(recipe_data)
 
-        json.dump({'recipes': recipes}, open('recipes.json', 'w'), ensure_ascii=False)
+        json.dump({'recipes': recipes}, open(os.path.join(CACHE_DIR, 'recipes.json'), 'w'), ensure_ascii=False)
         self.stdout.write(self.style.SUCCESS('Collected {} recipes'.format(len(recipes))))
 
-    def _scrape_urls(self):
+    def _scrape_images(self):
+        recipe_file = self._validate_recipes_json_file()
 
-        recipe_urls = []
+        recipes = json.load(open(recipe_file))
+        for i, recipe in enumerate(recipes['recipes']):
 
-        page = 1
+            recipe_exists = self._recipe_exists(slug=recipe['slug'])
 
-        while True:
-            url = 'https://cooking.nytimes.com/search?page={page}'.format(page=page)
-            response = requests.get(url)
-            data = response.content
-            html = etree.HTML(data)
-            articles = html.xpath('//article')
-            self.stdout.write(self.style.SUCCESS('Fetched {} with {} recipes'.format(url, len(articles))))
-            if articles:
-                for article in articles:
-                    url = article.attrib['data-url']
-                    recipe_urls.append(url)
-            else:  # no more pages
-                break
-            page += 1
+            # skip placeholder images
+            if self._is_placeholder_image(recipe['image']):
+                if recipe_exists:
+                    # unset recipe image since it's a placeholder
+                    Recipe.objects.filter(slug=recipe['slug']).update(image_path=None)
 
-        # save output as json file
-        json.dump({'urls': recipe_urls}, open('urls.json', 'w'))
-        self.stdout.write(self.style.SUCCESS('Completed urls'))
+            # skip recipes we've already imported
+            if not self.force and recipe_exists:
+                continue
+
+            try:
+                response = requests.get(recipe['image'], stream=True)
+                response.raise_for_status()
+            except Exception as e:
+                logging.exception(e)
+                self.stdout.write(self.style.ERROR('Could not download image {} for {}'.format(recipe['image'], recipe['name'])))
+                continue
+            # use image extension for new name based on slug
+            extension_match = re.match(r'.*(\.\w{3})$', os.path.basename(recipe['image']))
+            if extension_match:
+                extension = extension_match.groups()[0]
+            else:
+                extension = '.jpg'
+            image_name = '{}{}'.format(recipe['slug'], extension)
+            with open(os.path.join('static/recipes', image_name), 'wb') as out_file:
+                shutil.copyfileobj(response.raw, out_file)
+            if i != 0 and i % 100 == 0:
+                self.stdout.write(self.style.SUCCESS('Downloaded {} images'.format(i)))
+
+        self.stdout.write(self.style.SUCCESS('Completed images'))
+
+    def _ingest_recipes(self):
+
+        # retrieve and validate recipe file
+        recipe_file = self._validate_recipes_json_file()
+        recipes = json.load(open(recipe_file))
+
+        # import
+        for i, recipe in enumerate(recipes['recipes']):
+
+            # set image path if it exists
+            rel_image_path = os.path.join('static', 'recipes', '{}.jpg'.format(recipe['slug']))
+            abs_image_path = os.path.join(settings.BASE_DIR, rel_image_path)
+            image_url = '/' + rel_image_path if os.path.exists(abs_image_path) else None
+
+            # TODO - update external recipe urls to internal ones
+            #description = re.sub(r'https://cooking.nytimes.com/recipes/', '#/recipe/', recipe['description'] or '')
+            description = recipe['description']
+
+            # create recipe
+            recipe_obj, _ = Recipe.objects.update_or_create(
+                slug=recipe['slug'],
+                defaults=dict(
+                    name=recipe['name'],
+                    image_path=image_url,
+                    description=description,
+                    # parse duration like "PT45M" to 45 minutes
+                    total_time=parse_duration(recipe['totalTime']).seconds / 60 if 'totalTime' in recipe else None,
+                    servings=recipe['recipeYield'],
+                    rating_value=recipe['aggregateRating']['ratingValue'] if recipe['aggregateRating'] else None,
+                    rating_count=recipe['aggregateRating']['ratingCount'] if recipe['aggregateRating'] else None,
+                    ingredients=recipe['recipeIngredient'],
+                    instructions=[x['text'] for x in recipe['recipeInstructions'] or [] if 'text' in x],
+                    author=recipe['author']['name'],
+                )
+            )
+
+            # assign categories (they're csv strings)
+            categories = recipe['recipeCategory'].split(',')
+            for category in categories:
+                if not category:
+                    continue
+                cat_obj, _ = Category.objects.get_or_create(name=category.strip())
+                recipe_obj.categories.add(cat_obj)
+                recipe_obj.save()
+
+            # assign cuisines (they're csv strings)
+            cuisines = recipe['recipeCuisine'].split(',')
+            for cuisine in cuisines:
+                if not cuisine:
+                    continue
+                cuisine_obj, _ = Cuisine.objects.get_or_create(name=cuisine.strip())
+                recipe_obj.cuisines.add(cuisine_obj)
+                recipe_obj.save()
+
+            if i != 0 and i % 100 == 0:
+                self.stdout.write(self.style.SUCCESS('Ingested {} recipes'.format(i)))
+
+        # add search vector
+        vector = SearchVector('name', weight='A', config=POSTGRES_LANGUAGE_UNACCENT) + SearchVector('ingredients', weight='B', config=POSTGRES_LANGUAGE_UNACCENT)
+        Recipe.objects.update(search_vector=vector)
+
+        self.stdout.write(self.style.SUCCESS('Completed recipes'))
 
     def _validate_recipes_json_file(self):
-        urls_file = os.path.join(settings.BASE_DIR, 'recipes.json')
+        urls_file = os.path.join(CACHE_DIR, 'recipes.json')
 
         # validate the input urls file
         if not os.path.exists(urls_file):
