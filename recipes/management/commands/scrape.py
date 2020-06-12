@@ -122,7 +122,11 @@ class Command(BaseCommand):
         recipes = json.load(open(recipe_file))
         for i, recipe in enumerate(recipes['recipes']):
 
-            # skip if we already have this recipe imported
+            # skip placeholder images
+            if self._is_placeholder_image(recipe['image']):
+                continue
+
+            # skip recipes we've already imported
             if not self.force and self._recipe_exists(slug=recipe['slug']):
                 continue
 
@@ -254,3 +258,7 @@ class Command(BaseCommand):
 
     def _recipe_exists(self, slug):
         return Recipe.objects.filter(slug=slug).exists()
+
+    def _is_placeholder_image(self, image_path):
+        # placeholder images are like https://static01.nyt.com/applications/cooking/5b227f9/assets/15.png
+        return re.search('/assets/\d+\.(png|jpg|jpeg)', image_path, re.I)
