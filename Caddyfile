@@ -6,7 +6,7 @@
 
 recipes.crabdance.com:443 {
     # no robot index
-    header / X-Robots-Tag: noindex
+    header X-Robots-Tag noindex
     # the route directive lets you define the specific order of the processing
     # so we can match static files first and then reverse proxy everything else
     route {
