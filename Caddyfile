@@ -4,7 +4,7 @@
 
 # NOTE: swap in "localhost:80" in development
 
-recipes.crabdance.com:443 {
+recipes.eerieemu.com:443 {
     # no robot index
     header X-Robots-Tag noindex
     # the route directive lets you define the specific order of the processing
