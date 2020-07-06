@@ -29,6 +29,7 @@ class CategoryViewSet(viewsets.ModelViewSet):
     serializer_class = CategorySerializer
     filterset_fields = ['name']
     search_fields = ['name']
+    pagination_class = None
 
 
 @method_decorator(gzip_page, name='dispatch')
