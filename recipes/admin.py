@@ -9,7 +9,7 @@ class RecipeInlineAdmin(admin.TabularInline):
 
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
-    pass
+    list_display = ('name', 'type',)
 
 
 @admin.register(Cuisine)

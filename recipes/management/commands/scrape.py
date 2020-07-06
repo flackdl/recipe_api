@@ -18,6 +18,7 @@ from recipe_api.settings import POSTGRES_LANGUAGE_UNACCENT
 from recipes.models import Recipe, Category, Cuisine
 
 CACHE_DIR = '/tmp/recipes'
+URL_NYT = 'https://cooking.nytimes.com'
 
 
 class Command(BaseCommand):
@@ -25,6 +26,7 @@ class Command(BaseCommand):
     force = False
 
     def add_arguments(self, parser):
+        parser.add_argument('--categories', action='store_true', help='Captures all categories')
         parser.add_argument('--urls', action='store_true', help='Captures all recipe urls')
         parser.add_argument('--recipes', action='store_true', help='Captures all recipes')
         parser.add_argument('--images', action='store_true', help='Downloads all recipe images')
@@ -36,9 +38,13 @@ class Command(BaseCommand):
         self.force = options['force']
 
         # validate required args
-        if not any([options['urls'], options['recipes'], options['images'], options['ingest']]):
+        if not any([options['categories'], options['urls'], options['recipes'], options['images'], options['ingest']]):
             raise CommandError('Missing argument')
 
+        self._validate_cache_path()
+
+        if options['categories']:
+            self._scrape_categories()
         if options['urls']:
             self._scrape_urls()
         if options['recipes']:
@@ -53,6 +59,24 @@ class Command(BaseCommand):
         # clear cache
         cache.clear()
 
+    def _scrape_categories(self):
+        url = '{base_url}/search'.format(base_url=URL_NYT)
+        response = requests.get(url)
+        data = response.content
+        html = etree.HTML(data)
+        categories_processed = 0
+        for category_type in ['special_diets', 'cuisines', 'meal_types', 'dish_types']:
+            categories = html.xpath('//div[@facet-type="{}"]//label[@class="general-facet"]'.format(category_type))
+            for category in categories:
+                Category.objects.update_or_create(
+                    name=category.text,
+                    defaults=dict(
+                        type=category_type,
+                    )
+                )
+                categories_processed += 1
+        self.stdout.write(self.style.SUCCESS('Collected {} categories'.format(categories_processed)))
+
     def _scrape_urls(self):
 
         recipe_urls = []
@@ -60,7 +84,7 @@ class Command(BaseCommand):
         page = 1
 
         while True:
-            url = 'https://cooking.nytimes.com/search?page={page}'.format(page=page)
+            url = '{url}/search?page={page}'.format(url=URL_NYT, page=page)
             response = requests.get(url)
             data = response.content
             html = etree.HTML(data)
@@ -87,13 +111,6 @@ class Command(BaseCommand):
             self.stdout.write(self.style.ERROR('"urls.json" does not exist.  Run with --urls first'))
             sys.exit(1)
 
-        # create cache dir if it doesn't exist
-        try:
-            os.makedirs(CACHE_DIR)
-        except OSError as e:
-            if e.errno != errno.EEXIST:
-                raise
-
         self.stdout.write(self.style.SUCCESS('Scraping recipes'))
 
         recipes = []
@@ -116,7 +133,7 @@ class Command(BaseCommand):
             # scrape url
             else:
                 try:
-                    response = requests.get('https://cooking.nytimes.com{url}'.format(url=url))
+                    response = requests.get('{base_url}{url}'.format(base_url=URL_NYT, url=url))
                 except Exception as e:
                     logging.exception(e)
                     logging.warning('ERROR scraping url {}'.format(url))
@@ -199,9 +216,8 @@ class Command(BaseCommand):
             abs_image_path = os.path.join(settings.BASE_DIR, rel_image_path)
             image_url = '/' + rel_image_path if os.path.exists(abs_image_path) else None
 
-            # TODO - update external recipe urls to internal ones
-            #description = re.sub(r'https://cooking.nytimes.com/recipes/', '#/recipe/', recipe['description'] or '')
-            description = recipe['description']
+            # update external recipe urls to internal ones
+            description = re.sub(r'{base_url}/recipes/'.format(base_url=URL_NYT), '/#/recipe/', recipe['description'] or '')
 
             # create recipe
             recipe_obj, _ = Recipe.objects.update_or_create(
@@ -221,12 +237,13 @@ class Command(BaseCommand):
                 )
             )
 
-            # assign categories (they're csv strings)
-            categories = recipe['recipeCategory'].split(',')
+            # combine and assign categories and keywords (they're csv strings)
+            categories = recipe['recipeCategory'].split(',') + recipe['keywords'].split(',')
             for category in categories:
+                category_name = category.strip()
                 if not category:
                     continue
-                cat_obj, _ = Category.objects.get_or_create(name=category.strip())
+                cat_obj, _ = Category.objects.get_or_create(name=category_name)
                 recipe_obj.categories.add(cat_obj)
                 recipe_obj.save()
 
@@ -264,3 +281,11 @@ class Command(BaseCommand):
     def _is_placeholder_image(self, image_path):
         # placeholder images are like https://static01.nyt.com/applications/cooking/5b227f9/assets/15.png
         return re.search('/assets/\d+\.(png|jpg|jpeg)', image_path, re.I)
+
+    def _validate_cache_path(self):
+        # create cache dir if it doesn't exist
+        try:
+            os.makedirs(CACHE_DIR)
+        except OSError as e:
+            if e.errno != errno.EEXIST:
+                raise

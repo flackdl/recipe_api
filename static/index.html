@@ -273,7 +273,8 @@
 				return rxjs.forkJoin({
 					'categories': rxjs.ajax.ajax.getJSON('/api/category/').pipe(
 						rxjs.operators.map((data) => {
-							this.categories = data.results;
+							// categories don't have pagination
+							this.categories = data;
 							return this.categories;
 						}),
 					),
