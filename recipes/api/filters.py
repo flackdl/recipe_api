@@ -27,7 +27,6 @@ class RecipeFilter(filters.FilterSet):
             'rating_value': ['gte'],
             'rating_count': ['gte'],
             'categories': ['exact'],
-            'cuisines': ['exact'],
         }
 
 

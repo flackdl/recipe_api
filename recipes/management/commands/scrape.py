@@ -15,10 +15,14 @@ from django.core.management.base import BaseCommand, CommandError
 from django.core.cache import cache
 
 from recipe_api.settings import POSTGRES_LANGUAGE_UNACCENT
-from recipes.models import Recipe, Category, Cuisine
+from recipes.models import Recipe, Category
 
 CACHE_DIR = '/tmp/recipes'
 URL_NYT = 'https://cooking.nytimes.com'
+
+
+# TODO - must scrape raw html because json snippet doesn't include multiple ingredient sections
+#      - https://cooking.nytimes.com/recipes/1020480-savory-thai-noodles-with-seared-brussels-sprouts
 
 
 class Command(BaseCommand):
@@ -245,15 +249,6 @@ class Command(BaseCommand):
                     continue
                 cat_obj, _ = Category.objects.get_or_create(name=category_name)
                 recipe_obj.categories.add(cat_obj)
-                recipe_obj.save()
-
-            # assign cuisines (they're csv strings)
-            cuisines = recipe['recipeCuisine'].split(',')
-            for cuisine in cuisines:
-                if not cuisine:
-                    continue
-                cuisine_obj, _ = Cuisine.objects.get_or_create(name=cuisine.strip())
-                recipe_obj.cuisines.add(cuisine_obj)
                 recipe_obj.save()
 
             if i != 0 and i % 100 == 0:

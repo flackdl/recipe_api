@@ -63,7 +63,7 @@
 			</section>
 			<div>
 				<!-- search -->
-				<form class="columns is-multiline" @submit="onSearch">
+				<form class="columns is-multiline is-mobile" @submit="onSearch">
 					<!-- search input -->
 					<div class="column is-12">
 						<b-field>
@@ -72,10 +72,10 @@
 						</b-field>
 					</div>
 					<!-- cuisine filter -->
-					<b-field class="column is-4">
+					<b-field class="column is-6">
 						<b-taginput
-							v-model="cuisinesChosen"
-							:data="cuisinesFiltered"
+							v-model="categoriesChosen[categoryTypeCuisines]"
+							:data="categoriesFiltered[categoryTypeCuisines]"
 							size="is-small"
 							icon-pack="fas"
 							icon="globe-americas"
@@ -84,15 +84,15 @@
 							:open-on-focus="true"
 							field="name"
 							placeholder="cuisines..."
-							@add="cuisineAdded"
-							@typing="getFilteredCuisines">
+							@add="categoryAdded"
+							@typing="setFilteredCategoriesCuisines">
 						</b-taginput>
 					</b-field>
-					<!-- category filter -->
-					<b-field class="column is-4">
+					<!-- meal types filter -->
+					<b-field class="column is-6">
 						<b-taginput
-							v-model="categoriesChosen"
-							:data="categoriesFiltered"
+							v-model="categoriesChosen[categoryTypeMealTypes]"
+							:data="categoriesFiltered[categoryTypeMealTypes]"
 							size="is-small"
 							icon-pack="fas"
 							icon="utensils"
@@ -100,9 +100,43 @@
 							autocomplete
 							:open-on-focus="true"
 							field="name"
-							placeholder="categories..."
+							placeholder="meal types..."
 							@add="categoryAdded"
-							@typing="getFilteredCategories">
+							@typing="setFilteredCategoriesMealTypes">
+						</b-taginput>
+					</b-field>
+					<!-- dish types filter -->
+					<b-field class="column is-6">
+						<b-taginput
+							v-model="categoriesChosen[categoryTypeDishTypes]"
+							:data="categoriesFiltered[categoryTypeDishTypes]"
+							size="is-small"
+							icon-pack="fas"
+							icon="utensils"
+							type="is-info"
+							autocomplete
+							:open-on-focus="true"
+							field="name"
+							placeholder="dish types..."
+							@add="categoryAdded"
+							@typing="setFilteredCategoriesDishTypes">
+						</b-taginput>
+					</b-field>
+					<!-- special diets filter -->
+					<b-field class="column is-6">
+						<b-taginput
+							v-model="categoriesChosen[categoryTypeSpecialDiets]"
+							:data="categoriesFiltered[categoryTypeSpecialDiets]"
+							size="is-small"
+							icon-pack="fas"
+							icon="user"
+							type="is-info"
+							autocomplete
+							:open-on-focus="true"
+							field="name"
+							placeholder="special diets..."
+							@add="categoryAdded"
+							@typing="setFilteredCategoriesSpecialDiets">
 						</b-taginput>
 					</b-field>
 					<div class="field column">
@@ -256,7 +290,6 @@
 	let coreMixin = {
 		data() {
 			return {
-				cuisines: [],
 				categories: [],
 				loadingComponent: null,
 				isContentLoading: true,
@@ -270,21 +303,17 @@
 				this.loadingComponent.close();
 			},
 			loadCoreData() {
-				return rxjs.forkJoin({
-					'categories': rxjs.ajax.ajax.getJSON('/api/category/').pipe(
+				return rxjs.ajax.ajax.getJSON('/api/category/').pipe(
 						rxjs.operators.map((data) => {
-							// categories don't have pagination
-							this.categories = data;
-							return this.categories;
+							// only include categories with a type
+							this.categories = data.filter((category) => {
+								return category.type;
+							});
+							return {
+								categories: this.categories,
+							};
 						}),
-					),
-					'cuisines': rxjs.ajax.ajax.getJSON('/api/cuisine/').pipe(
-						rxjs.operators.map((data) => {
-							this.cuisines = data.results;
-							return this.cuisines;
-						}),
-					),
-				});
+					);
 			},
 		}
 	}
@@ -304,6 +333,11 @@
 		template: '#recipe-header',
 	});
 
+	const CATEGORY_CUISINES = 'cuisines';
+	const CATEGORY_MEAL_TYPES = 'meal_types';
+	const CATEGORY_DISH_TYPES = 'dish_types';
+	const CATEGORY_SPECIAL_DIETS = 'special_diets';
+
 	// main app
 	let app = new Vue({
 		el: '#app',
@@ -318,10 +352,23 @@
 						data () {
 							return {
 								page: 1,
-								cuisinesFiltered: [],
-								categoriesFiltered: [],
-								cuisinesChosen: [],
-								categoriesChosen: [],
+								// need to redefine these so they're available in the templates
+								categoryTypeCuisines: CATEGORY_CUISINES,
+								categoryTypeMealTypes: CATEGORY_MEAL_TYPES,
+								categoryTypeDishTypes: CATEGORY_DISH_TYPES,
+								categoryTypeSpecialDiets: CATEGORY_SPECIAL_DIETS,
+								categoriesFiltered: {
+									[CATEGORY_CUISINES]: [],
+									[CATEGORY_MEAL_TYPES]: [],
+									[CATEGORY_DISH_TYPES]: [],
+									[CATEGORY_SPECIAL_DIETS]: [],
+								},
+								categoriesChosen: {
+									[CATEGORY_CUISINES]: [],
+									[CATEGORY_MEAL_TYPES]: [],
+									[CATEGORY_DISH_TYPES]: [],
+									[CATEGORY_SPECIAL_DIETS]: [],
+								},
 								searchQuery: '',
 								searchResults: null,
 								hasImage: true,
@@ -329,11 +376,15 @@
 							}
 						},
 						beforeRouteUpdate (to, from, next) {
-							// react to route changes in the same component since the normal life cycle hooks aren't called
+							// handle route changes in the same component since the normal life cycle hooks aren't called
 							this.searchQuery = to.query.search || '';
 							this.page = to.query.page || 1;
-							this.categoriesChosen = this.filterObjectsFromIds(to.query.categories || [], this.categories);
-							this.cuisinesChosen = this.filterObjectsFromIds(to.query.cuisines || [], this.cuisines);
+							this.categoriesChosen = {
+								[CATEGORY_CUISINES]: this.filterCategoryObjectsFromIdsAndType(to.query.categories || [], CATEGORY_CUISINES),
+								[CATEGORY_MEAL_TYPES]: this.filterCategoryObjectsFromIdsAndType(to.query.categories || [], CATEGORY_MEAL_TYPES),
+								[CATEGORY_DISH_TYPES]: this.filterCategoryObjectsFromIdsAndType(to.query.categories || [], CATEGORY_DISH_TYPES),
+								[CATEGORY_SPECIAL_DIETS]: this.filterCategoryObjectsFromIdsAndType(to.query.categories || [], CATEGORY_SPECIAL_DIETS),
+							}
 							this.search();
 							next();
 						},
@@ -345,55 +396,68 @@
 							this.showLoading();
 
 							// fetch core data
-							this.loadCoreData().subscribe((data) => {
+							this.loadCoreData().subscribe(() => {
 								this.hideLoading();
 
-								// make copies of the filterable categories and cuisines
-								this.categoriesFiltered = data.categories ? data.categories.slice() : [];
-								this.cuisinesFiltered = data.cuisines ? data.cuisines.slice() : [];
+								// make copies of the filterable categories
+								//this.categoriesFiltered = data.categories ? data.categories.slice() : [];
+								this.resetCategoriesFiltered();
 
 								// initialize form state from query params
 								this.searchQuery = this.$route.query.search || '';
 								this.page = parseInt(this.$route.query.page || 1);
-								this.categoriesChosen = this.filterObjectsFromIds(this.$route.query.categories || [], this.categories);
-								this.cuisinesChosen = this.filterObjectsFromIds(this.$route.query.cuisines || [], this.cuisines);
+								this.categoriesChosen = {
+									[CATEGORY_CUISINES]: this.filterCategoryObjectsFromIdsAndType(this.$route.query.categories || [], CATEGORY_CUISINES),
+									[CATEGORY_MEAL_TYPES]: this.filterCategoryObjectsFromIdsAndType(this.$route.query.categories || [], CATEGORY_MEAL_TYPES),
+									[CATEGORY_DISH_TYPES]: this.filterCategoryObjectsFromIdsAndType(this.$route.query.categories || [], CATEGORY_DISH_TYPES),
+									[CATEGORY_SPECIAL_DIETS]: this.filterCategoryObjectsFromIdsAndType(this.$route.query.categories || [], CATEGORY_SPECIAL_DIETS),
+								}
 
 								// search
 								this.search();
 							});
 						},
 						methods: {
-							filterObjectsFromIds(ids, objects) {
+							filterCategoryObjectsFromIdsAndType(ids, type) {
 								// coerce a list
 								ids = Array.isArray(ids) ? ids : [ids];
-								return objects.filter((object) => {
-									return ids.includes(String(object.id));
+								return this.categories.filter((category) => {
+									return category.type === type && ids.includes(String(category.id));
 								});
+							},
+							resetCategoriesFiltered() {
+								// reset all the filtered categories
+								for (let type of Object.getOwnPropertyNames(this.categoriesFiltered)) {
+									this.categoriesFiltered[type] = this.categories.filter((category) => {
+										return category.type === type;
+									});
+								}
 							},
 							hasSearchResults() {
 								return this.searchResults && this.searchResults.results.length > 0;
 							},
-							cuisineAdded() {
-								// reset the cuisines choices
-								this.cuisinesFiltered = this.cuisines.slice();
-							},
 							categoryAdded() {
 								// reset the categories choices
-								this.categoriesFiltered = this.categories.slice();
+								this.resetCategoriesFiltered();
 							},
-							getFilteredCuisines(text) {
-								this.cuisinesFiltered = this.cuisines.filter((cuisine) => {
-									return cuisine.name
-										.toLowerCase()
-										.indexOf(text.toLowerCase()) >= 0
-								})
+							setFilteredCategoriesCuisines(text) {
+								return this.setFilteredCategories(CATEGORY_CUISINES, text);
 							},
-							getFilteredCategories(text) {
-								this.categoriesFiltered = this.categories.filter((category) => {
+							setFilteredCategoriesMealTypes(text) {
+								return this.setFilteredCategories(CATEGORY_MEAL_TYPES, text);
+							},
+							setFilteredCategoriesDishTypes(text) {
+								return this.setFilteredCategories(CATEGORY_DISH_TYPES, text);
+							},
+							setFilteredCategoriesSpecialDiets(text) {
+								return this.setFilteredCategories(CATEGORY_SPECIAL_DIETS, text);
+							},
+							setFilteredCategories(catType, text) {
+								this.categoriesFiltered[catType] = this.categories.filter((category) => {
 									return category.name
 										.toLowerCase()
 										.indexOf(text.toLowerCase()) >= 0
-								})
+								});
 							},
 							onSearch (e) {
 								// reset page since it's a new search
@@ -442,11 +506,16 @@
 								});
 							},
 							getSearchUrlParams() {
-								let params = this.cuisinesChosen.map((cuisine) => {
-									return `cuisines=${cuisine.id}`;
-								}).concat(this.categoriesChosen.map((category) => {
-									return `categories=${category.id}`;
-								}));
+								let params = [];
+
+								// build category filters
+								Object.getOwnPropertyNames(this.categoriesChosen).forEach((type) => {
+									if (this.categoriesChosen[type].length) {
+										this.categoriesChosen[type].forEach((category) => {
+											params.push(`categories=${category.id}`)
+										});
+									}
+								});
 								// add image filter
 								if (this.hasImage) {
 									params = params.concat([`has_image=${this.hasImage}`]);
@@ -500,14 +569,7 @@
 										label: object.name,
 										link: `#/?categories=${object.id}`,
 									};
-								}).concat(this.cuisines.filter((cuisine) => {
-									return this.recipe.cuisines.includes(cuisine.id);
-								}).map((object) => {
-									return {
-										label: object.name,
-										link: `#/?cuisines=${object.id}`,
-									};
-								}));
+								});
 							},
 						}
 					},
