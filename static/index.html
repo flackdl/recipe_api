@@ -454,7 +454,7 @@
 							},
 							setFilteredCategories(catType, text) {
 								this.categoriesFiltered[catType] = this.categories.filter((category) => {
-									return category.name
+									return category.type === catType && category.name
 										.toLowerCase()
 										.indexOf(text.toLowerCase()) >= 0
 								});
