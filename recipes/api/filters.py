@@ -1,15 +1,29 @@
 from functools import reduce
+
+from django.contrib.postgres.aggregates import ArrayAgg
 from django.contrib.postgres.search import SearchRank, SearchQuery
 from django.db.models import F
 from rest_framework.filters import SearchFilter
-from django_filters import rest_framework as filters
+from django_filters import rest_framework as filters, ModelMultipleChoiceFilter
 
 from recipe_api.settings import POSTGRES_LANGUAGE_UNACCENT
-from recipes.models import Recipe
+from recipes.models import Recipe, Category
 
 
 class RecipeFilter(filters.FilterSet):
     has_image = filters.BooleanFilter(field_name="image_path", lookup_expr='isnull', label='Has Image', exclude=True)
+    categories = ModelMultipleChoiceFilter(
+        queryset=Category.objects.all(),
+        method='filter_categories',
+    )
+
+    def filter_categories(self, queryset, name, value):
+        # custom filter to guarantee recipes only appear when they
+        # include ALL the supplied categories vs when a recipe may only have one overlapping category
+        categories = value
+        queryset = queryset.annotate(cats=ArrayAgg('categories__id'))
+        queryset = queryset.filter(cats__contains=[c.id for c in categories])
+        return queryset
 
     def filter_queryset(self, queryset):
         # order by existing fields and then rating with nulls last
@@ -26,7 +40,6 @@ class RecipeFilter(filters.FilterSet):
             'slug': ['exact'],
             'rating_value': ['gte'],
             'rating_count': ['gte'],
-            'categories': ['exact'],
         }
 
 
