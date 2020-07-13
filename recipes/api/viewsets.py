@@ -5,21 +5,12 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import viewsets
 
 from recipes.api.filters import SearchVectorFilter, RecipeFilter
-from recipes.api.serializers import CategorySerializer, RecipeSerializer, CuisineSerializer
-from recipes.models import Category, Recipe, Cuisine
+from recipes.api.serializers import CategorySerializer, RecipeSerializer
+from recipes.models import Category, Recipe
 
 
 CACHE_HOUR = 60 * 60
 CACHE_DAY = CACHE_HOUR * 24
-
-
-@method_decorator(gzip_page, name='dispatch')
-@method_decorator(cache_page(timeout=CACHE_DAY), name='dispatch')
-class CuisineViewSet(viewsets.ModelViewSet):
-    queryset = Cuisine.objects.all()
-    serializer_class = CuisineSerializer
-    filterset_fields = ['name']
-    search_fields = ['name']
 
 
 @method_decorator(gzip_page, name='dispatch')

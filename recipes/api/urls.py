@@ -3,7 +3,6 @@ from rest_framework import routers
 from recipes.api import viewsets
 
 router = routers.DefaultRouter()
-router.register('cuisine', viewsets.CuisineViewSet)
 router.register('category', viewsets.CategoryViewSet)
 router.register('recipe', viewsets.RecipeViewSet)
 

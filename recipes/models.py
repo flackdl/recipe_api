@@ -17,7 +17,6 @@ class Recipe(models.Model):
     ingredients = fields.ArrayField(base_field=models.CharField(max_length=1500))
     instructions = fields.ArrayField(base_field=models.CharField(max_length=3000))
     categories = models.ManyToManyField('Category')
-    cuisines = models.ManyToManyField('Cuisine')
     author = models.CharField(max_length=100)
     search_vector = SearchVectorField(null=True)  # postgres search vector populated after creation
 
@@ -28,16 +27,6 @@ class Recipe(models.Model):
             Index(fields=['rating_value']),
             Index(fields=['rating_count']),
         ]
-
-    def __str__(self):
-        return self.name
-
-
-class Cuisine(models.Model):
-    name = models.CharField(max_length=100, unique=True)
-
-    class Meta:
-        ordering = ('name',)
 
     def __str__(self):
         return self.name
