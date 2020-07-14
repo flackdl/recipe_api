@@ -34,7 +34,7 @@ class Recipe(models.Model):
 
 class Category(models.Model):
     name = models.CharField(max_length=100, unique=True)
-    type = models.CharField(max_length=50, blank=True, null=True)
+    type = models.CharField(max_length=50)
 
     class Meta:
         verbose_name_plural = 'categories'
