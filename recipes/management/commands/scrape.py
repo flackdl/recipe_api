@@ -19,6 +19,7 @@ from recipes.models import Recipe, Category
 
 CACHE_DIR = '/tmp/recipes'
 URL_NYT = 'https://cooking.nytimes.com'
+CATEGORY_TYPES = ['special_diets', 'cuisines', 'meal_types', 'dish_types']
 
 
 # TODO - must scrape raw html because json snippet doesn't include multiple ingredient sections
@@ -69,7 +70,7 @@ class Command(BaseCommand):
         data = response.content
         html = etree.HTML(data)
         categories_processed = 0
-        for category_type in ['special_diets', 'cuisines', 'meal_types', 'dish_types']:
+        for category_type in CATEGORY_TYPES:
             categories = html.xpath('//div[@facet-type="{}"]//label[@class="general-facet"]'.format(category_type))
             for category in categories:
                 Category.objects.update_or_create(
@@ -242,7 +243,7 @@ class Command(BaseCommand):
             )
 
             # combine and assign categories and keywords (they're csv strings)
-            categories = recipe['recipeCategory'].split(',') + recipe['keywords'].split(',')
+            categories = recipe['recipeCategory'].split(',') + recipe['recipeCuisine'].split(',') + recipe['keywords'].split(',')
             for category in categories:
                 category_name = category.strip()
                 if not category:
