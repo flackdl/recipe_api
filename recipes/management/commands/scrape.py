@@ -224,6 +224,9 @@ class Command(BaseCommand):
             # update external recipe urls to internal ones
             description = re.sub(r'{base_url}/recipes/'.format(base_url=URL_NYT), '/#/recipe/', recipe['description'] or '')
 
+            # sanitize ingredients by removing empty items
+            ingredients = [i for i in recipe['recipeIngredient'] if i]
+
             # create recipe
             recipe_obj, _ = Recipe.objects.update_or_create(
                 slug=recipe['slug'],
@@ -236,7 +239,7 @@ class Command(BaseCommand):
                     servings=recipe['recipeYield'],
                     rating_value=recipe['aggregateRating']['ratingValue'] if recipe['aggregateRating'] else None,
                     rating_count=recipe['aggregateRating']['ratingCount'] if recipe['aggregateRating'] else None,
-                    ingredients=recipe['recipeIngredient'],
+                    ingredients=ingredients,
                     instructions=[x['text'] for x in recipe['recipeInstructions'] or [] if 'text' in x],
                     author=recipe['author']['name'],
                 )
@@ -248,9 +251,11 @@ class Command(BaseCommand):
                 category_name = category.strip()
                 if not category:
                     continue
-                cat_obj, _ = Category.objects.get_or_create(name=category_name)
-                recipe_obj.categories.add(cat_obj)
-                recipe_obj.save()
+                cat_obj = Category.objects.filter(name=category_name).first()
+                # only assign categories that already exist
+                if cat_obj:
+                    recipe_obj.categories.add(cat_obj)
+                    recipe_obj.save()
 
             if i != 0 and i % 100 == 0:
                 self.stdout.write(self.style.SUCCESS('Ingested {} recipes'.format(i)))
