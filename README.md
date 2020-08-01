@@ -43,11 +43,8 @@ Create superuser for admin:
     
 Scrape recipes:
 
-    python manage.py scrape --urls
-    python manage.py scrape --images
-    python manage.py scrape --recipes
-    python manage.py scrape --ingest
-    
+    python manage.py scrape --categories --urls --recipes --images --ingest
+        
 Run web server:    
     
     python manage.py runserver
