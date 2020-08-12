@@ -6,6 +6,7 @@ import sys
 import json
 import logging
 import requests
+from django.contrib.postgres.aggregates import StringAgg
 from django.core.management import call_command
 from django.utils.dateparse import parse_duration
 from lxml import etree
@@ -260,9 +261,18 @@ class Command(BaseCommand):
             if i != 0 and i % 100 == 0:
                 self.stdout.write(self.style.SUCCESS('Ingested {} recipes'.format(i)))
 
-        # add search vector
-        vector = SearchVector('name', weight='A', config=POSTGRES_LANGUAGE_UNACCENT) + SearchVector('ingredients', weight='B', config=POSTGRES_LANGUAGE_UNACCENT)
-        Recipe.objects.update(search_vector=vector)
+        # define search vector
+        vector = (
+            SearchVector('name', weight='A', config=POSTGRES_LANGUAGE_UNACCENT) +
+            SearchVector(StringAgg('categories__name', ' '), weight='B', config=POSTGRES_LANGUAGE_UNACCENT) +
+            SearchVector('ingredients', weight='C', config=POSTGRES_LANGUAGE_UNACCENT)
+        )
+
+        # add search vector to all recipes
+        # NOTE: it's necessary to do it one by one since django doesn't support updates on aggregates (i.e categories)
+        for recipe in Recipe.objects.annotate(vector=vector):
+            recipe.search_vector = recipe.vector
+            recipe.save()
 
         self.stdout.write(self.style.SUCCESS('Completed recipes'))
 
