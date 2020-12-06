@@ -19,6 +19,7 @@ class Recipe(models.Model):
     categories = models.ManyToManyField('Category')
     author = models.CharField(max_length=100)
     search_vector = SearchVectorField(null=True)  # postgres search vector populated after creation
+    date_added = models.DateField(auto_now_add=True)
 
     class Meta:
         indexes = [
