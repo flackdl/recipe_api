@@ -179,8 +179,8 @@ class Command(BaseCommand):
 
             recipe_exists = self._recipe_exists(slug=recipe['slug'])
 
-            # skip placeholder images
-            if self._is_placeholder_image(recipe['image']):
+            # skip empty/placeholder images
+            if 'image' not in recipe or self._is_placeholder_image(recipe['image']):
                 continue
 
             # skip recipes we've already imported
