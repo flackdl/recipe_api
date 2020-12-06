@@ -225,8 +225,11 @@ class Command(BaseCommand):
             # update external recipe urls to internal ones
             description = re.sub(r'{base_url}/recipes/'.format(base_url=URL_NYT), '/#/recipe/', recipe['description'] or '')
 
+            # skip recipes without ingredients
+            if 'recipeIngredient' not in recipe:
+                continue
             # sanitize ingredients by removing empty items
-            ingredients = [i for i in recipe.get('recipeIngredient', []) or [] if i]
+            ingredients = [i for i in recipe['recipeIngredient'] if i]
 
             # create recipe
             recipe_obj, _ = Recipe.objects.update_or_create(
