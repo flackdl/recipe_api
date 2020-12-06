@@ -226,7 +226,7 @@ class Command(BaseCommand):
             description = re.sub(r'{base_url}/recipes/'.format(base_url=URL_NYT), '/#/recipe/', recipe['description'] or '')
 
             # sanitize ingredients by removing empty items
-            ingredients = [i for i in recipe['recipeIngredient'] if i]
+            ingredients = [i for i in recipe.get('recipeIngredient', []) or [] if i]
 
             # create recipe
             recipe_obj, _ = Recipe.objects.update_or_create(
