@@ -50,3 +50,22 @@ Run web server:
     python manage.py runserver
     
 URL: http://localhost:8000
+
+
+### Deployment
+
+*Clone repo first.*
+
+Bring up everything:
+
+    docker-compose up -d
+
+Deploy front-end updates:
+
+    git pull
+    docker-compose up --force-recreate -d recipes
+
+Deploy back-end:
+
+    git pull
+    docker-compose up --build --force-recreate -d recipes
