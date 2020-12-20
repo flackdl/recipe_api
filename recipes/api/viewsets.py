@@ -3,6 +3,7 @@ from django.views.decorators.cache import cache_page
 from django.views.decorators.gzip import gzip_page
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import viewsets
+from rest_framework.filters import OrderingFilter
 
 from recipes.api.filters import SearchVectorFilter, RecipeFilter
 from recipes.api.serializers import CategorySerializer, RecipeSerializer
@@ -29,5 +30,6 @@ class RecipeViewSet(viewsets.ModelViewSet):
     queryset = Recipe.objects.all()
     serializer_class = RecipeSerializer
     filterset_class = RecipeFilter
-    filter_backends = (SearchVectorFilter, DjangoFilterBackend)
+    filter_backends = (SearchVectorFilter, DjangoFilterBackend, OrderingFilter)
     search_fields = ['search_vector']
+    ordering_fields = ['rating_value', 'date_added']
