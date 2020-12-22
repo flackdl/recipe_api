@@ -122,7 +122,7 @@ class Command(BaseCommand):
 
         # save output as json file
         json.dump({'urls': recipe_urls}, open(os.path.join(CACHE_DIR, 'urls.json'), 'w'))
-        self.stdout.write(self.style.SUCCESS('Completed urls'))
+        self.stdout.write(self.style.SUCCESS('Completed {} urls'.format(len(recipe_urls))))
 
     def _scrape_recipes(self):
 
@@ -185,7 +185,7 @@ class Command(BaseCommand):
             recipes.append(recipe_data)
 
         json.dump({'recipes': recipes}, open(os.path.join(CACHE_DIR, 'recipes.json'), 'w'), ensure_ascii=False)
-        self.stdout.write(self.style.SUCCESS('Collected {} recipes'.format(len(recipes))))
+        self.stdout.write(self.style.SUCCESS('Scraped {} recipes total'.format(len(recipes))))
 
     def _scrape_images(self):
         recipe_file = self._validate_recipes_json_file()
