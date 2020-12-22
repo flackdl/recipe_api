@@ -89,9 +89,23 @@ class Command(BaseCommand):
 
         page = 1
 
+        sequential_failures = 0
+
         while True:
             url = '{url}/search?page={page}'.format(url=URL_NYT, page=page)
             response = requests.get(url)
+
+            # some pages return an error so keep trying a few more times
+            if not response.ok:
+                sequential_failures += 1
+                # try the next page
+                if sequential_failures <= 3:
+                    continue
+                # too many consecutive errors
+                else:
+                    break
+
+            sequential_failures = 0
             data = response.content
             html = etree.HTML(data)
             articles = html.xpath('//article')
