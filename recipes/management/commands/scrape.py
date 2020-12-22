@@ -97,9 +97,11 @@ class Command(BaseCommand):
 
             # some pages return an error so keep trying a few more times
             if not response.ok:
+                self.stdout.write(self.style.WARNING('Bad sequential response #{} for {}'.format(sequential_failures, url)))
                 sequential_failures += 1
                 # try the next page
-                if sequential_failures <= 3:
+                if sequential_failures <= 5:
+                    page += 1
                     continue
                 # too many consecutive errors
                 else:
