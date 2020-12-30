@@ -139,16 +139,16 @@ class Command(BaseCommand):
         using_cached = 0
 
         for i, url in enumerate(json.load(open(urls_file, 'r'))['urls']):
+            slug = os.path.basename(url)
 
             # skip if we already have this recipe imported
-            slug = os.path.basename(url)
             if not self.force and self._recipe_exists(slug=slug):
                 continue
 
             cache_path = os.path.join(CACHE_DIR, os.path.basename(url))
 
             # use cache if it exists
-            if os.path.exists(cache_path):
+            if not self.force and os.path.exists(cache_path):
                 content = open(cache_path, 'r').read()
                 if using_cached != 0 and using_cached % 100 == 0:
                     logging.warning('Used {} cached pages'.format(using_cached))
