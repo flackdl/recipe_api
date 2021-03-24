@@ -195,8 +195,10 @@ class Command(BaseCommand):
 
             recipe_exists = self._recipe_exists(slug=recipe['slug'])
 
+            image_url = self._get_image_url_from_recipe(recipe)
+
             # skip empty/placeholder images
-            if 'image' not in recipe or self._is_placeholder_image(recipe['image']):
+            if not image_url or self._is_placeholder_image(image_url):
                 continue
 
             # skip recipes we've already imported
@@ -204,14 +206,14 @@ class Command(BaseCommand):
                 continue
 
             try:
-                response = requests.get(recipe['image'], stream=True)
+                response = requests.get(image_url, stream=True)
                 response.raise_for_status()
             except Exception as e:
                 logging.exception(e)
-                self.stdout.write(self.style.ERROR('Could not download image {} for {}'.format(recipe['image'], recipe['name'])))
+                self.stdout.write(self.style.ERROR('Could not download image {} for {}'.format(image_url, recipe['name'])))
                 continue
             # use image extension for new name based on slug
-            extension_match = re.match(r'.*(\.\w{3})$', os.path.basename(recipe['image']))
+            extension_match = re.match(r'.*(\.\w{3})$', os.path.basename(image_url))
             if extension_match:
                 extension = extension_match.groups()[0]
             else:
@@ -308,9 +310,17 @@ class Command(BaseCommand):
     def _recipe_exists(self, slug):
         return Recipe.objects.filter(slug=slug).exists()
 
-    def _is_placeholder_image(self, image_path):
+    def _is_placeholder_image(self, image_path: str):
         # placeholder images are like https://static01.nyt.com/applications/cooking/5b227f9/assets/15.png
         return re.search('/assets/\d+\.(png|jpg|jpeg)', image_path, re.I)
+
+    def _get_image_url_from_recipe(self, recipe: dict):
+        if 'image' in recipe:
+            if isinstance(recipe['image'], str):
+                return recipe['image']
+            elif isinstance(recipe['image'], dict) and 'url' in recipe['image']:
+                return recipe['image']['url']
+        return None
 
     def _validate_cache_path(self):
         # create cache dir if it doesn't exist
