@@ -51,7 +51,7 @@ Scrape recipes:
         
 Run web server:    
     
-    python manage.py runserver
+    DEBUG=1 python manage.py runserver
     
 URL: http://localhost:8000
 
