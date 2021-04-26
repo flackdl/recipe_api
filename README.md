@@ -36,6 +36,10 @@ Install python dependencies:
 Create database and tables:
 
     python manage.py migrate    
+
+Create cache tables:
+
+    python manage.py createcachetable 
     
 Create superuser for admin:
 
