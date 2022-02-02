@@ -241,7 +241,7 @@ class Command(BaseCommand):
             image_url = '/' + rel_image_path if os.path.exists(abs_image_path) else None
 
             # update external recipe urls to internal ones
-            description = re.sub(r'{base_url}/recipes/'.format(base_url=URL_NYT), '/#/recipe/', recipe['description'] or '')
+            description = re.sub(r'{base_url}/recipes/'.format(base_url=URL_NYT), '/#/recipe/', recipe.get('description') or '')
 
             # skip recipes without ingredients
             if 'recipeIngredient' not in recipe:
