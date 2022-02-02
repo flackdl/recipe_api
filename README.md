@@ -73,3 +73,7 @@ Deploy back-end:
 
     git pull
     docker-compose up --build --force-recreate -d recipes
+
+Force scrape:
+
+    docker-compose exec recipes python manage.py scrape --categories --urls --recipes --images --ingest
