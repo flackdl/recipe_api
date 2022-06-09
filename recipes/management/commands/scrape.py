@@ -115,8 +115,7 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS('Fetched {} with {} recipes'.format(url, len(articles))))
             if articles:
                 for article in articles:
-                    url = article.attrib['data-url']
-                    page_recipe_urls.add(url)
+                    page_recipe_urls.add(article.attrib['data-url'])
             else:  # no more pages
                 break
 
