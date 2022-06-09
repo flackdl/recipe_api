@@ -130,7 +130,7 @@ class Command(BaseCommand):
             page += 1
 
         # save output as json file
-        json.dump({'urls': recipe_urls}, open(os.path.join(CACHE_DIR, 'urls.json'), 'w'))
+        json.dump({'urls': list(recipe_urls)}, open(os.path.join(CACHE_DIR, 'urls.json'), 'w'))
         self.stdout.write(self.style.SUCCESS('Completed {} urls'.format(len(recipe_urls))))
 
     def _scrape_recipes(self):
