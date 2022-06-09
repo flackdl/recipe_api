@@ -122,7 +122,7 @@ class Command(BaseCommand):
 
             # validate
             if page_recipe_urls.issubset(recipe_urls):
-                self.stdout.write(self.style.SUCCESS('Page {} is identical to last so stopping scrape: {}'.format(page, url)))
+                self.stdout.write(self.style.SUCCESS('Page {} is identical to last so stopping scrape'.format(page)))
                 break
             else:
                 recipe_urls.update(page_recipe_urls)
