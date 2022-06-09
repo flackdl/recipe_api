@@ -85,13 +85,14 @@ class Command(BaseCommand):
 
     def _scrape_urls(self):
 
-        recipe_urls = []
+        recipe_urls = set()
 
         page = 1
 
         sequential_failures = 0
 
         while True:
+            page_recipe_urls = set()
             url = '{url}/search?page={page}'.format(url=URL_NYT, page=page)
             response = requests.get(url)
 
@@ -115,9 +116,17 @@ class Command(BaseCommand):
             if articles:
                 for article in articles:
                     url = article.attrib['data-url']
-                    recipe_urls.append(url)
+                    page_recipe_urls.add(url)
             else:  # no more pages
                 break
+
+            # validate
+            if page_recipe_urls.issubset(recipe_urls):
+                self.stdout.write(self.style.SUCCESS('Page {} is identical to last so stopping scrape: {}'.format(page, url)))
+                break
+            else:
+                recipe_urls.update(page_recipe_urls)
+
             page += 1
 
         # save output as json file
