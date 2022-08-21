@@ -69,7 +69,7 @@ Deploy front-end updates:
     git pull
     docker-compose up --force-recreate -d recipes
 
-Deploy back-end:
+Deploy front and back-end:
 
     git pull
     docker-compose up --build --force-recreate -d recipes

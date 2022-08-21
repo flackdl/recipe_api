@@ -360,12 +360,11 @@ class Command(BaseCommand):
         return re.search('/assets/\d+\.(png|jpg|jpeg)', image_path, re.I)
 
     def _get_image_url_from_recipe(self, recipe: dict):
-        if 'image' in recipe:
-            if isinstance(recipe['image'], str):
-                return recipe['image']
-            elif isinstance(recipe['image'], dict) and 'url' in recipe['image']:
-                return recipe['image']['url']
-        return None
+        if not recipe:
+            return
+        if recipe.get('image'):
+            if recipe['image'].get('src'):
+                return recipe['image']['src'].get('article')
 
     def _validate_cache_path(self):
         # create cache dir if it doesn't exist
