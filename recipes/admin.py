@@ -14,5 +14,6 @@ class CategoryAdmin(admin.ModelAdmin):
 
 @admin.register(Recipe)
 class RecipeAdmin(admin.ModelAdmin):
+    search_fields = ('name',)
     list_display = ('name', 'date_added',)
     list_filter = ('categories',)

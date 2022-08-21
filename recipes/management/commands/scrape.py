@@ -5,10 +5,11 @@ import shutil
 import sys
 import json
 import logging
+from typing import List
+
 import requests
 from django.contrib.postgres.aggregates import StringAgg
 from django.core.management import call_command
-from django.utils.dateparse import parse_duration
 from lxml import etree
 from django.conf import settings
 from django.contrib.postgres.search import SearchVector
@@ -21,10 +22,6 @@ from recipes.models import Recipe, Category
 CACHE_DIR = '/tmp/recipes'
 URL_NYT = 'https://cooking.nytimes.com'
 CATEGORY_TYPES = ['special_diets', 'cuisines', 'meal_types', 'dish_types']
-
-
-# TODO - must scrape raw html because json snippet doesn't include multiple ingredient sections
-#      - https://cooking.nytimes.com/recipes/1020480-savory-thai-noodles-with-seared-brussels-sprouts
 
 
 class Command(BaseCommand):
@@ -84,11 +81,9 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS('Collected {} categories'.format(categories_processed)))
 
     def _scrape_urls(self):
-
         recipe_urls = set()
-
         page = 1
-
+        identical_page_failures = 0
         sequential_failures = 0
 
         while True:
@@ -109,27 +104,36 @@ class Command(BaseCommand):
                     break
 
             sequential_failures = 0
+
             data = response.content
             html = etree.HTML(data)
             articles = html.xpath('//article')
             self.stdout.write(self.style.SUCCESS('Fetched {} with {} recipes'.format(url, len(articles))))
             if articles:
                 for article in articles:
+                    recipe_url = article.attrib['data-url']
+                    # verify it matches a recipe url pattern
+                    if not re.search('^/recipes/', recipe_url):
+                        continue
                     page_recipe_urls.add(article.attrib['data-url'])
             else:  # no more pages
                 break
 
             # validate
             if page_recipe_urls.issubset(recipe_urls):
-                self.stdout.write(self.style.SUCCESS('Page {} is identical to last so stopping scrape'.format(page)))
-                break
+                identical_page_failures += 1
+                self.stdout.write(self.style.WARNING(f'identical page response #{identical_page_failures} for {url}'))
+                if identical_page_failures >= 15:
+                    self.stdout.write(self.style.SUCCESS(f'Pages have been identical the last {identical_page_failures} times so stopping scrape on page {page}'))
+                    break
             else:
+                identical_page_failures = 0
                 recipe_urls.update(page_recipe_urls)
 
             page += 1
 
         # save output as json file
-        json.dump({'urls': list(recipe_urls)}, open(os.path.join(CACHE_DIR, 'urls.json'), 'w'))
+        json.dump({'urls': list(recipe_urls)}, open(os.path.join(CACHE_DIR, 'urls.json'), 'w'), indent=2)
         self.stdout.write(self.style.SUCCESS('Completed {} urls'.format(len(recipe_urls))))
 
     def _scrape_recipes(self):
@@ -176,7 +180,7 @@ class Command(BaseCommand):
             # parse recipe content
             try:
                 html = etree.HTML(content)
-                recipe_json = html.xpath('//script[@type="application/ld+json"]')[0]
+                recipe_json = html.xpath('//script[@id="__NEXT_DATA__"]')[0]
             except Exception as e:
                 logging.warning('ERROR parsing {}'.format(url))
                 logging.exception(e)
@@ -185,14 +189,17 @@ class Command(BaseCommand):
             if i != 0 and i % 100 == 0:
                 self.stdout.write(self.style.SUCCESS('Scraped {} recipes'.format(i)))
 
-            recipe_data = json.loads(recipe_json.text)
+            page_data = json.loads(recipe_json.text)
 
-            # include their slug
-            recipe_data['slug'] = os.path.basename(url)
+            # validate recipe data
+            if 'props' not in page_data or 'pageProps' not in page_data['props']:
+                continue
+
+            recipe_data = page_data['props']['pageProps']
 
             recipes.append(recipe_data)
 
-        json.dump({'recipes': recipes}, open(os.path.join(CACHE_DIR, 'recipes.json'), 'w'), ensure_ascii=False)
+        json.dump({'recipes': recipes}, open(os.path.join(CACHE_DIR, 'recipes.json'), 'w'), ensure_ascii=False, indent=2)
         self.stdout.write(self.style.SUCCESS('Scraped {} recipes total'.format(len(recipes))))
 
     def _scrape_images(self):
@@ -200,8 +207,9 @@ class Command(BaseCommand):
 
         recipes = json.load(open(recipe_file))
         for i, recipe in enumerate(recipes['recipes']):
+            recipe = recipe['recipe']
 
-            recipe_exists = self._recipe_exists(slug=recipe['slug'])
+            recipe_exists = self._recipe_exists(slug=os.path.basename(recipe['url']))
 
             image_url = self._get_image_url_from_recipe(recipe)
 
@@ -226,7 +234,7 @@ class Command(BaseCommand):
                 extension = extension_match.groups()[0]
             else:
                 extension = '.jpg'
-            image_name = '{}{}'.format(recipe['slug'], extension)
+            image_name = '{}{}'.format(os.path.basename(recipe['url']), extension)
             with open(os.path.join('static/recipes', image_name), 'wb') as out_file:
                 shutil.copyfileobj(response.raw, out_file)
             if i != 0 and i % 100 == 0:
@@ -235,53 +243,58 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS('Completed images'))
 
     def _ingest_recipes(self):
+        num_ingested = 0
 
         # retrieve and validate recipe file
         recipe_file = self._validate_recipes_json_file()
-        recipes = json.load(open(recipe_file))
+        recipes = json.load(open(recipe_file))['recipes']
 
         # import
-        for i, recipe in enumerate(recipes['recipes']):
+        for i, recipe in enumerate(recipes):
+            if 'recipe' not in recipe:
+                continue
+            recipe = recipe['recipe']
+
+            slug = os.path.basename(recipe['url'])
 
             # set image path if it exists
-            rel_image_path = os.path.join('static', 'recipes', '{}.jpg'.format(recipe['slug']))
+            rel_image_path = os.path.join('static', 'recipes', '{}.jpg'.format(slug))
             abs_image_path = os.path.join(settings.BASE_DIR, rel_image_path)
             image_url = '/' + rel_image_path if os.path.exists(abs_image_path) else None
 
             # update external recipe urls to internal ones
-            description = re.sub(r'{base_url}/recipes/'.format(base_url=URL_NYT), '/#/recipe/', recipe.get('description') or '')
+            description = re.sub(r'{base_url}/recipes/'.format(base_url=URL_NYT), '/#/recipe/', recipe.get('topnote') or '')
 
-            # skip recipes without ingredients
-            if 'recipeIngredient' not in recipe:
+            ingredients = self._get_ingredients_from_recipe(recipe)
+            instructions = self._get_instructions_from_recipe(recipe)
+            if not instructions or not ingredients:
                 continue
-            # sanitize ingredients by removing empty items
-            ingredients = [i for i in recipe['recipeIngredient'] if i]
+
+            author = recipe.get('contentAttribution', {}).get('cardByline')
 
             # create recipe
             recipe_obj, _ = Recipe.objects.update_or_create(
-                slug=recipe['slug'],
+                slug=slug,
                 defaults=dict(
-                    name=recipe['name'],
+                    name=recipe['title'],
                     image_path=image_url,
                     description=description,
-                    # parse duration like "PT45M" to 45 minutes
-                    total_time=parse_duration(recipe['totalTime']).seconds / 60 if 'totalTime' in recipe else None,
+                    total_time_string=recipe['time'],
                     servings=recipe['recipeYield'],
-                    rating_value=recipe['aggregateRating']['ratingValue'] if recipe['aggregateRating'] else None,
-                    rating_count=recipe['aggregateRating']['ratingCount'] if recipe['aggregateRating'] else None,
+                    rating_value=recipe.get('ratings', {}).get('avgRating'),
+                    rating_count=recipe.get('ratings', {}).get('numRatings'),
                     ingredients=ingredients,
-                    instructions=[x['text'] for x in recipe['recipeInstructions'] or [] if 'text' in x],
-                    author=recipe['author']['name'],
+                    instructions=instructions,
+                    author=author[:100],
                 )
             )
 
+            num_ingested += 1
+
             # combine and assign categories and keywords (they're csv strings)
-            categories = recipe['recipeCategory'].split(',') + recipe['recipeCuisine'].split(',') + recipe['keywords'].split(',')
+            categories = [t['name'] for t in recipe.get('tags', []) if t.get('name')]
             for category in categories:
-                category_name = category.strip()
-                if not category:
-                    continue
-                cat_obj = Category.objects.filter(name=category_name).first()
+                cat_obj = Category.objects.filter(name=category).first()
                 # only assign categories that already exist
                 if cat_obj:
                     recipe_obj.categories.add(cat_obj)
@@ -298,12 +311,36 @@ class Command(BaseCommand):
         )
 
         # add search vector to all recipes
-        # NOTE: it's necessary to do it one by one since django doesn't support updates on aggregates (i.e categories)
+        # NOTE: it's necessary to do it one by one since django doesn't support updates on aggregates (e.g. categories)
         for recipe in Recipe.objects.annotate(vector=vector):
             recipe.search_vector = recipe.vector
             recipe.save()
 
-        self.stdout.write(self.style.SUCCESS('Completed recipes'))
+        self.stdout.write(self.style.SUCCESS(f'Complete: ingested {num_ingested} recipes'))
+
+    def _get_ingredients_from_recipe(self, recipe: dict) -> List:
+        ingredients = []
+        for ingredient in recipe.get('ingredients', []):
+            # section
+            if 'ingredients' in ingredient:
+                ingredients.append(f'@@{ingredient["name"]}@@')
+                for sub_ingredient in ingredient['ingredients']:
+                    ingredients.append(f"{sub_ingredient['quantity']} {sub_ingredient['text']}")
+            else:
+                ingredients.append(f"{ingredient['quantity']} {ingredient['text']}")
+        return ingredients
+
+    def _get_instructions_from_recipe(self, recipe: dict) -> List:
+        instructions = []
+        for step in recipe.get('steps', []):
+            # section with nested steps
+            if 'name' in step:
+                instructions.append(f'@@{step["name"]}@@')
+                for inner_step in step.get('steps', []):
+                    instructions.append(inner_step['description'])
+            else:  # single section steps
+                instructions.append(step['description'])
+        return instructions
 
     def _validate_recipes_json_file(self):
         urls_file = os.path.join(CACHE_DIR, 'recipes.json')

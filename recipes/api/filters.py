@@ -56,6 +56,8 @@ class SearchVectorFilter(SearchFilter):
     """
     search_vector_field_name = 'search_vector'
 
+    # TODO - implement trigram search
+
     def filter_queryset(self, request, queryset, view):
         queryset = super().filter_queryset(request, queryset, view)
         # build combined search queries

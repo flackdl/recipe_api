@@ -201,7 +201,7 @@
 		<div class="recipe">
 			<p class="title is-4">{{ recipe.name }}</p>
 			<div class="subtitle is-6">
-				<div><span class="tag is-light">Time</span> {{ recipe.total_time }} minutes</div>
+				<div><span class="tag is-light">Time</span> {{ recipe.total_time_string }}</div>
 				<div><span class="tag is-light">Servings</span> {{ recipe.servings }}</div>
 				<div v-if="recipe.rating_value">
 					<span class="tag is-light">Rating</span>
@@ -238,14 +238,20 @@
 						<div class="columns">
 							<div class="column is-6">
 								<h2>Ingredients</h2>
-								<li v-for="ingredient in recipe.ingredients">{{ ingredient }}</li>
+								<div v-for="ingredient in recipe.ingredients">
+									<h6 v-if="isSectionHeader(ingredient)" class="my-3">{{ sanitizeSectionHeader(ingredient) }}</h6>
+									<li v-if="!isSectionHeader(ingredient)">
+										{{ ingredient }}
+									</li>
+								</div>
 							</div>
 							<div class="column is-6">
 								<h2>Instructions</h2>
-								<div class="content">
-									<ol type="1">
-										<li v-for="instruction in recipe.instructions">{{ instruction }}</li>
-									</ol>
+								<div v-for="instruction in recipe.instructions">
+									<h6 v-if="isSectionHeader(instruction)" class="my-3">{{ sanitizeSectionHeader(instruction) }}</h6>
+									<li v-if="!isSectionHeader(instruction)">
+										{{ instruction }}
+									</li>
 								</div>
 							</div>
 						</div>
@@ -570,6 +576,12 @@
 										link: `#/?categories=${object.id}`,
 									};
 								});
+							},
+							isSectionHeader(value) {
+								return /@@.*@@/.test(value);
+							},
+							sanitizeSectionHeader(value) {
+								return value.replaceAll(/^@@/g, '').replaceAll(/@@$/g, '');
 							},
 						}
 					},

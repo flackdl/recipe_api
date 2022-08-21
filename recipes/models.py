@@ -10,7 +10,7 @@ class Recipe(models.Model):
     slug = models.SlugField(max_length=200, unique=True)
     image_path = models.CharField(max_length=210, null=True, blank=True)
     description = models.TextField()
-    total_time = models.IntegerField(null=True, blank=True)  # minutes
+    total_time_string = models.CharField(null=True, blank=True, max_length=100)  # human readable, e.g "1 hour"
     servings = models.CharField(max_length=100)
     rating_value = models.IntegerField(null=True, blank=True)
     rating_count = models.IntegerField(null=True, blank=True)
