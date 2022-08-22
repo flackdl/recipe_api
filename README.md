@@ -76,4 +76,4 @@ Deploy front and back-end:
 
 Force scrape:
 
-    docker-compose exec recipes python manage.py scrape --categories --urls --recipes --images --ingest
+    docker-compose exec recipes python manage.py scrape --categories --urls --recipes --images --ingest --force
