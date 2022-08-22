@@ -207,6 +207,8 @@ class Command(BaseCommand):
 
         recipes = json.load(open(recipe_file))
         for i, recipe in enumerate(recipes['recipes']):
+            if not recipe or not recipe.get('recipe'):
+                continue
             recipe = recipe['recipe']
 
             recipe_exists = self._recipe_exists(slug=os.path.basename(recipe['url']))
