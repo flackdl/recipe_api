@@ -123,7 +123,7 @@ class Command(BaseCommand):
             if page_recipe_urls.issubset(recipe_urls):
                 identical_page_failures += 1
                 self.stdout.write(self.style.WARNING(f'identical page response #{identical_page_failures} for {url}'))
-                if identical_page_failures >= 15:
+                if identical_page_failures >= 20:
                     self.stdout.write(self.style.SUCCESS(f'Pages have been identical the last {identical_page_failures} times so stopping scrape on page {page}'))
                     break
             else:
@@ -193,6 +193,7 @@ class Command(BaseCommand):
 
             # validate recipe data
             if 'props' not in page_data or 'pageProps' not in page_data['props']:
+                logging.warning(f'recipe {url} has no expected props data')
                 continue
 
             recipe_data = page_data['props']['pageProps']
@@ -208,6 +209,7 @@ class Command(BaseCommand):
         recipes = json.load(open(recipe_file))
         for i, recipe in enumerate(recipes['recipes']):
             if not recipe or not recipe.get('recipe'):
+                logging.warning(f'skipping absent recipe record at {i}: {json.dumps(recipe)}')
                 continue
             recipe = recipe['recipe']
 
