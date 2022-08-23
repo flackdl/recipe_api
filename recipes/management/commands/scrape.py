@@ -92,17 +92,15 @@ class Command(BaseCommand):
             url = '{url}/search?page={page}'.format(url=URL_NYT, page=page)
             response = requests.get(url)
 
-            # some pages return an error so keep trying a few more times
+            # repeat requests few times on failures
             if not response.ok:
                 self.stdout.write(self.style.WARNING('Bad sequential response #{} for {}'.format(sequential_failures, url)))
                 sequential_failures += 1
-                # try the next page
-                if sequential_failures <= 5:
+                # too many consecutive errors for this page - go to next page
+                if sequential_failures > 5:
+                    self.stdout.write(self.style.WARNING('Too many failures for {}, continuing'.format(url)))
                     page += 1
-                    continue
-                # too many consecutive errors
-                else:
-                    break
+                continue
 
             sequential_failures = 0
 
@@ -120,7 +118,12 @@ class Command(BaseCommand):
             else:  # no more pages
                 break
 
-            # validate
+            # validate urls in page
+            if not page_recipe_urls:
+                logging.warning(f'no recipe urls for {url}')
+                page += 1
+                continue
+            # validate identical page
             if page_recipe_urls.issubset(recipe_urls):
                 identical_page_failures += 1
                 self.stdout.write(self.style.WARNING(f'identical page response #{identical_page_failures} for {url}'))
