@@ -1,6 +1,7 @@
 import errno
 import os
 import re
+from glob import glob
 import shutil
 import sys
 import json
@@ -137,7 +138,7 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS('Completed {} urls'.format(len(recipe_urls))))
 
     def _scrape_recipes(self):
-
+        recipes_scraped = 0
         urls_file = os.path.join(CACHE_DIR, 'urls.json')
 
         # validate the input urls file
@@ -147,7 +148,6 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS('Scraping recipes'))
 
-        recipes = []
         using_cached = 0
 
         for i, url in enumerate(json.load(open(urls_file, 'r'))['urls']):
@@ -157,7 +157,7 @@ class Command(BaseCommand):
             if not self.force and self._recipe_exists(slug=slug):
                 continue
 
-            cache_path = os.path.join(CACHE_DIR, os.path.basename(url))
+            cache_path = os.path.join(CACHE_DIR, slug)
 
             # use cache if it exists
             if not self.force and os.path.exists(cache_path):
@@ -196,20 +196,22 @@ class Command(BaseCommand):
                 logging.warning(f'recipe {url} has no expected props data')
                 continue
 
+            # write recipe json file
             recipe_data = page_data['props']['pageProps']
+            recipe_file = os.path.join(CACHE_DIR, f'{slug}.json')
+            json.dump(recipe_data, open(recipe_file, 'w'), ensure_ascii=False, indent=2)
 
-            recipes.append(recipe_data)
+            recipes_scraped += 1
 
-        json.dump({'recipes': recipes}, open(os.path.join(CACHE_DIR, 'recipes.json'), 'w'), ensure_ascii=False, indent=2)
-        self.stdout.write(self.style.SUCCESS('Scraped {} recipes total'.format(len(recipes))))
+        self.stdout.write(self.style.SUCCESS('Scraped {} recipes total'.format(recipes_scraped)))
 
     def _scrape_images(self):
-        recipe_file = self._validate_recipes_json_file()
-
-        recipes = json.load(open(recipe_file))
-        for i, recipe in enumerate(recipes['recipes']):
+        # loop through all recipe json files
+        recipe_files = self._get_recipe_json_files()
+        for i, recipe_file in enumerate(recipe_files):
+            recipe = json.load(open(recipe_file))
             if not recipe or not recipe.get('recipe'):
-                logging.warning(f'skipping absent recipe record at {i}: {json.dumps(recipe)}')
+                logging.warning(f'skipping absent recipe record {recipe_file}')
                 continue
             recipe = recipe['recipe']
 
@@ -249,13 +251,12 @@ class Command(BaseCommand):
     def _ingest_recipes(self):
         num_ingested = 0
 
-        # retrieve and validate recipe file
-        recipe_file = self._validate_recipes_json_file()
-        recipes = json.load(open(recipe_file))['recipes']
-
-        # import
-        for i, recipe in enumerate(recipes):
+        # loop through all recipe json files
+        recipe_files = self._get_recipe_json_files()
+        for i, recipe_file in enumerate(recipe_files):
+            recipe = json.load(open(recipe_file))
             if 'recipe' not in recipe:
+                logging.warning(f'skipping absent recipe in file {recipe_file}')
                 continue
             recipe = recipe['recipe']
 
@@ -346,15 +347,8 @@ class Command(BaseCommand):
                 instructions.append(step['description'])
         return instructions
 
-    def _validate_recipes_json_file(self):
-        urls_file = os.path.join(CACHE_DIR, 'recipes.json')
-
-        # validate the input urls file
-        if not os.path.exists(urls_file):
-            self.stdout.write(self.style.ERROR('"recipes.json" does not exist.  Run with --recipes first'))
-            sys.exit(1)
-
-        return urls_file
+    def _get_recipe_json_files(self) -> List[str]:
+        return glob(os.path.join(CACHE_DIR, '*.json'))
 
     def _recipe_exists(self, slug):
         return Recipe.objects.filter(slug=slug).exists()
