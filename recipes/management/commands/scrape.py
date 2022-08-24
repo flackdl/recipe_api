@@ -217,13 +217,15 @@ class Command(BaseCommand):
                 logging.warning(f'skipping absent recipe record {recipe_file}')
                 continue
             recipe = recipe['recipe']
+            slug = os.path.basename(recipe['url'])
 
-            recipe_exists = self._recipe_exists(slug=os.path.basename(recipe['url']))
+            recipe_exists = self._recipe_exists(slug=slug)
 
             image_url = self._get_image_url_from_recipe(recipe)
 
             # skip empty/placeholder images
             if not image_url or self._is_placeholder_image(image_url):
+                logging.warning(f'skipping absent image for {recipe_file}')
                 continue
 
             # skip recipes we've already imported
@@ -276,6 +278,7 @@ class Command(BaseCommand):
             ingredients = self._get_ingredients_from_recipe(recipe)
             instructions = self._get_instructions_from_recipe(recipe)
             if not instructions or not ingredients:
+                logging.warning(f'skipping recipe {recipe_file} without ingredients or instructions')
                 continue
 
             author = recipe.get('contentAttribution', {}).get('cardByline')
@@ -309,7 +312,7 @@ class Command(BaseCommand):
                     recipe_obj.save()
 
             if i != 0 and i % 100 == 0:
-                self.stdout.write(self.style.SUCCESS('Ingested {} recipes'.format(i)))
+                self.stdout.write(self.style.SUCCESS('Ingested {} recipes'.format(num_ingested)))
 
         # define search vector
         vector = (
@@ -329,9 +332,10 @@ class Command(BaseCommand):
     def _get_ingredients_from_recipe(self, recipe: dict) -> List:
         ingredients = []
         for ingredient in recipe.get('ingredients', []):
-            # section
             if 'ingredients' in ingredient:
-                ingredients.append(f'@@{ingredient["name"]}@@')
+                # section name
+                if ingredient.get('name'):
+                    ingredients.append(f'@@{ingredient["name"]}@@')
                 for sub_ingredient in ingredient['ingredients']:
                     ingredients.append(f"{sub_ingredient['quantity']} {sub_ingredient['text']}")
             else:
@@ -340,14 +344,15 @@ class Command(BaseCommand):
 
     def _get_instructions_from_recipe(self, recipe: dict) -> List:
         instructions = []
-        for step in recipe.get('steps', []):
+        for instruction in recipe.get('steps', []):
             # section with nested steps
-            if 'name' in step:
-                instructions.append(f'@@{step["name"]}@@')
-                for inner_step in step.get('steps', []):
+            if 'name' in instruction:
+                if instruction.get('name'):
+                    instructions.append(f'@@{instruction["name"]}@@')
+                for inner_step in instruction.get('steps', []):
                     instructions.append(inner_step['description'])
             else:  # single section steps
-                instructions.append(step['description'])
+                instructions.append(instruction['description'])
         return instructions
 
     def _get_recipe_json_files(self) -> List[str]:
