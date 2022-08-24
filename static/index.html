@@ -240,18 +240,18 @@
 								<h2>Ingredients</h2>
 								<div v-for="ingredient in recipe.ingredients">
 									<h6 v-if="isSectionHeader(ingredient)" class="my-3">{{ sanitizeSectionHeader(ingredient) }}</h6>
-									<li v-if="!isSectionHeader(ingredient)">
+									<div class="box my-1" v-if="!isSectionHeader(ingredient)">
 										{{ ingredient }}
-									</li>
+									</div>
 								</div>
 							</div>
 							<div class="column is-6">
 								<h2>Instructions</h2>
 								<div v-for="instruction in recipe.instructions">
 									<h6 v-if="isSectionHeader(instruction)" class="my-3">{{ sanitizeSectionHeader(instruction) }}</h6>
-									<li v-if="!isSectionHeader(instruction)">
+									<div class="box my-1" v-if="!isSectionHeader(instruction)">
 										{{ instruction }}
-									</li>
+									</div>
 								</div>
 							</div>
 						</div>
