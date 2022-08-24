@@ -241,7 +241,7 @@
 								<div v-for="ingredient in recipe.ingredients">
 									<h6 v-if="isSectionHeader(ingredient)" class="my-3">{{ sanitizeSectionHeader(ingredient) }}</h6>
 									<div class="box my-1" v-if="!isSectionHeader(ingredient)">
-										{{ ingredient }}
+										<span v-html="ingredient"></span>
 									</div>
 								</div>
 							</div>
@@ -250,7 +250,7 @@
 								<div v-for="instruction in recipe.instructions">
 									<h6 v-if="isSectionHeader(instruction)" class="my-3">{{ sanitizeSectionHeader(instruction) }}</h6>
 									<div class="box my-1" v-if="!isSectionHeader(instruction)">
-										{{ instruction }}
+										<span v-html="instruction"></span>
 									</div>
 								</div>
 							</div>
