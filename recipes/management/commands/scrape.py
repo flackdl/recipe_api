@@ -6,7 +6,7 @@ import shutil
 import sys
 import json
 import logging
-from typing import List
+from typing import List, Union
 
 import requests
 from django.contrib.postgres.aggregates import StringAgg
@@ -36,13 +36,14 @@ class Command(BaseCommand):
         parser.add_argument('--images', action='store_true', help='Downloads all recipe images')
         parser.add_argument('--ingest', action='store_true', help='Ingests recipes into db')
         parser.add_argument('--force', action='store_true', help='Forces an update')
+        parser.add_argument('--scrape_and_ingest_recipe_slug', help="Manually scrape and ingest a specific recipe using it's slug")
 
     def handle(self, *args, **options):
 
         self.force = options['force']
 
         # validate required args
-        if not any([options['categories'], options['urls'], options['recipes'], options['images'], options['ingest']]):
+        if not any([options['categories'], options['urls'], options['recipes'], options['images'], options['ingest'], options['scrape_and_ingest_recipe_slug']]):
             raise CommandError('Missing argument')
 
         self._validate_cache_path()
@@ -59,6 +60,8 @@ class Command(BaseCommand):
             call_command('collectstatic', interactive=False)
         if options['ingest']:
             self._ingest_recipes()
+        if options['scrape_and_ingest_recipe_slug']:
+            self._scrape_and_ingest_specific_recipe(options['scrape_and_ingest_recipe_slug'])
 
         # clear cache
         cache.clear()
@@ -170,20 +173,18 @@ class Command(BaseCommand):
             # scrape url
             else:
                 try:
-                    response = requests.get('{base_url}{url}'.format(base_url=URL_NYT, url=url))
+                    content = self._get_url_content('{base_url}{url}'.format(base_url=URL_NYT, url=url))
                 except Exception as e:
                     logging.exception(e)
                     logging.warning('ERROR scraping url {}'.format(url))
                     continue
-                content = response.content.decode()
                 # store cached version
                 with open(cache_path, 'w') as fp:
                     fp.write(content)
 
             # parse recipe content
             try:
-                html = etree.HTML(content)
-                recipe_json = html.xpath('//script[@id="__NEXT_DATA__"]')[0]
+                page_data = self._get_recipe_page_data(content)
             except Exception as e:
                 logging.warning('ERROR parsing {}'.format(url))
                 logging.exception(e)
@@ -191,8 +192,6 @@ class Command(BaseCommand):
 
             if i != 0 and i % 100 == 0:
                 self.stdout.write(self.style.SUCCESS('Scraped {} recipes'.format(i)))
-
-            page_data = json.loads(recipe_json.text)
 
             # validate recipe data
             if 'props' not in page_data or 'pageProps' not in page_data['props']:
@@ -207,6 +206,15 @@ class Command(BaseCommand):
             recipes_scraped += 1
 
         self.stdout.write(self.style.SUCCESS('Scraped {} recipes total'.format(recipes_scraped)))
+
+    def _get_url_content(self, url) -> str:
+        response = requests.get(url)
+        return response.content.decode()
+
+    def _get_recipe_page_data(self, content: str) -> dict:
+        html = etree.HTML(content)
+        recipe_json = html.xpath('//script[@id="__NEXT_DATA__"]')[0]
+        return json.loads(recipe_json.text)
 
     def _scrape_images(self):
         # loop through all recipe json files
@@ -259,58 +267,8 @@ class Command(BaseCommand):
         # loop through all recipe json files
         recipe_files = self._get_recipe_json_files()
         for i, recipe_file in enumerate(recipe_files):
-            recipe = json.load(open(recipe_file))
-            if 'recipe' not in recipe:
-                logging.warning(f'skipping absent recipe in file {recipe_file}')
-                continue
-            recipe = recipe['recipe']
-
-            slug = os.path.basename(recipe['url'])
-
-            # set image path if it exists
-            rel_image_path = os.path.join('static', 'recipes', '{}.jpg'.format(slug))
-            abs_image_path = os.path.join(settings.BASE_DIR, rel_image_path)
-            image_url = '/' + rel_image_path if os.path.exists(abs_image_path) else None
-
-            # update external recipe urls to internal ones
-            description = re.sub(r'{base_url}/recipes/'.format(base_url=URL_NYT), '/#/recipe/', recipe.get('topnote') or '')
-
-            ingredients = self._get_ingredients_from_recipe(recipe)
-            instructions = self._get_instructions_from_recipe(recipe)
-            if not instructions or not ingredients:
-                logging.warning(f'skipping recipe {recipe_file} without ingredients or instructions')
-                continue
-
-            author = recipe.get('contentAttribution', {}).get('cardByline')
-
-            # create recipe
-            recipe_obj, _ = Recipe.objects.update_or_create(
-                slug=slug,
-                defaults=dict(
-                    name=recipe['title'],
-                    image_path=image_url,
-                    description=description,
-                    total_time_string=recipe['time'],
-                    servings=recipe['recipeYield'],
-                    rating_value=recipe.get('ratings', {}).get('avgRating'),
-                    rating_count=recipe.get('ratings', {}).get('numRatings'),
-                    ingredients=ingredients,
-                    instructions=instructions,
-                    author=author[:100],
-                )
-            )
-
-            num_ingested += 1
-
-            # combine and assign categories and keywords (they're csv strings)
-            categories = [t['name'] for t in recipe.get('tags', []) if t.get('name')]
-            for category in categories:
-                cat_obj = Category.objects.filter(name=category).first()
-                # only assign categories that already exist
-                if cat_obj:
-                    recipe_obj.categories.add(cat_obj)
-                    recipe_obj.save()
-
+            if self._ingest_recipe(recipe_file):
+                num_ingested += 1
             if i != 0 and i % 100 == 0:
                 self.stdout.write(self.style.SUCCESS('Ingested {} recipes'.format(num_ingested)))
 
@@ -328,6 +286,69 @@ class Command(BaseCommand):
             recipe.save()
 
         self.stdout.write(self.style.SUCCESS(f'Complete: ingested {num_ingested} recipes'))
+
+    def _ingest_recipe(self, recipe_file: str) -> Union[Recipe, None]:
+
+        recipe = json.load(open(recipe_file))
+        if 'recipe' not in recipe:
+            logging.warning(f'skipping absent recipe in file {recipe_file}')
+            return None
+        recipe = recipe['recipe']
+
+        slug = os.path.basename(recipe['url'])
+
+        # set image path if it exists
+        rel_image_path = os.path.join('static', 'recipes', '{}.jpg'.format(slug))
+        abs_image_path = os.path.join(settings.BASE_DIR, rel_image_path)
+        image_url = '/' + rel_image_path if os.path.exists(abs_image_path) else None
+
+        # update external recipe urls to internal ones
+        description = re.sub(r'{base_url}/recipes/'.format(base_url=URL_NYT), '/#/recipe/', recipe.get('topnote') or '')
+
+        ingredients = self._get_ingredients_from_recipe(recipe)
+        instructions = self._get_instructions_from_recipe(recipe)
+        if not instructions or not ingredients:
+            logging.warning(f'skipping recipe {recipe_file} without ingredients or instructions')
+            return None
+
+        author = recipe.get('contentAttribution', {}).get('cardByline')
+
+        # create recipe
+        recipe_obj, _ = Recipe.objects.update_or_create(
+            slug=slug,
+            defaults=dict(
+                name=recipe['title'],
+                image_path=image_url,
+                description=description,
+                total_time_string=recipe['time'],
+                servings=recipe['recipeYield'],
+                rating_value=recipe.get('ratings', {}).get('avgRating'),
+                rating_count=recipe.get('ratings', {}).get('numRatings'),
+                ingredients=ingredients,
+                instructions=instructions,
+                author=author[:100],
+            )
+        )
+
+        # combine and assign categories and keywords (they're csv strings)
+        categories = [t['name'] for t in recipe.get('tags', []) if t.get('name')]
+        for category in categories:
+            cat_obj = Category.objects.filter(name=category).first()
+            # only assign categories that already exist
+            if cat_obj:
+                recipe_obj.categories.add(cat_obj)
+                recipe_obj.save()
+
+        return recipe_obj
+
+    def _scrape_and_ingest_specific_recipe(self, slug: str):
+        content = self._get_url_content(f'{URL_NYT}/recipes/{slug}')
+        page_data = self._get_recipe_page_data(content)
+        recipe_data = page_data['props']['pageProps']
+        recipe_file = os.path.join(CACHE_DIR, f'{slug}.json')
+        json.dump(recipe_data, open(recipe_file, 'w'), ensure_ascii=False, indent=2)
+        self._ingest_recipe(recipe_file)
+        self.stdout.write(self.style.SUCCESS('Scraped & ingested recipe: {} to {}'.format(slug, recipe_file)))
 
     def _get_ingredients_from_recipe(self, recipe: dict) -> List:
         ingredients = []
