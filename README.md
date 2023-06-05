@@ -47,7 +47,7 @@ Create superuser for admin:
     
 Scrape recipes:
 
-    python manage.py scrape --categories --urls --recipes --images --ingest
+    python manage.py scrape --urls --recipes --images --ingest
         
 Run web server:    
     
@@ -76,4 +76,4 @@ Deploy front and back-end:
 
 Force scrape:
 
-    docker-compose exec recipes python manage.py scrape --categories --urls --recipes --images --ingest --force
+    docker-compose exec recipes python manage.py scrape --urls --recipes --images --ingest --force
