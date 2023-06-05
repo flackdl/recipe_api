@@ -7,7 +7,7 @@ import sys
 import json
 import logging
 from typing import List, Union
-
+from urllib.parse import urlparse
 import requests
 from django.contrib.postgres.aggregates import StringAgg
 from django.core.management import call_command
@@ -30,7 +30,6 @@ class Command(BaseCommand):
     force = False
 
     def add_arguments(self, parser):
-        parser.add_argument('--categories', action='store_true', help='Captures all categories')
         parser.add_argument('--urls', action='store_true', help='Captures all recipe urls')
         parser.add_argument('--recipes', action='store_true', help='Captures all recipes')
         parser.add_argument('--images', action='store_true', help='Downloads all recipe images')
@@ -43,13 +42,11 @@ class Command(BaseCommand):
         self.force = options['force']
 
         # validate required args
-        if not any([options['categories'], options['urls'], options['recipes'], options['images'], options['ingest'], options['scrape_and_ingest_recipe_slug']]):
+        if not any([options['urls'], options['recipes'], options['images'], options['ingest'], options['scrape_and_ingest_recipe_slug']]):
             raise CommandError('Missing argument')
 
         self._validate_cache_path()
 
-        if options['categories']:
-            self._scrape_categories()
         if options['urls']:
             self._scrape_urls()
         if options['recipes']:
@@ -66,23 +63,19 @@ class Command(BaseCommand):
         # clear cache
         cache.clear()
 
-    def _scrape_categories(self):
-        url = '{base_url}/search'.format(base_url=URL_NYT)
-        response = requests.get(url)
-        data = response.content
-        html = etree.HTML(data)
-        categories_processed = 0
-        for category_type in CATEGORY_TYPES:
-            categories = html.xpath('//div[@facet-type="{}"]//label[@class="general-facet"]'.format(category_type))
-            for category in categories:
-                Category.objects.update_or_create(
-                    name=category.text,
-                    defaults=dict(
-                        type=category_type,
-                    )
-                )
-                categories_processed += 1
-        self.stdout.write(self.style.SUCCESS('Collected {} categories'.format(categories_processed)))
+    def _fetch_page_props(self, url: str) -> dict:
+        content = self._fetch_url_content(url)
+        return self._parse_page_props(content)
+
+    def _parse_page_props(self, content) -> dict:
+        empty = {}
+        html = etree.HTML(content)
+        script_json = html.xpath('//script[@id="__NEXT_DATA__"]')
+        # return empty if script is absent
+        if not script_json:
+            return empty
+        data = json.loads(script_json[0].text)
+        return data.get('props', empty).get('pageProps', empty)
 
     def _scrape_urls(self):
         recipe_urls = set()
@@ -93,10 +86,11 @@ class Command(BaseCommand):
         while True:
             page_recipe_urls = set()
             url = '{url}/search?page={page}'.format(url=URL_NYT, page=page)
-            response = requests.get(url)
-
-            # repeat requests few times on failures
-            if not response.ok:
+            try:
+                props = self._fetch_page_props(url)
+            except requests.exceptions.RequestException as e:
+                logging.warning(e)
+                # repeat requests few times on failures
                 self.stdout.write(self.style.WARNING('Bad sequential response #{} for {}'.format(sequential_failures, url)))
                 sequential_failures += 1
                 # too many consecutive errors for this page - go to next page
@@ -106,24 +100,26 @@ class Command(BaseCommand):
                 continue
 
             sequential_failures = 0
+            results = props.get('results', [])
+            # filter to type: recipe (e.g. not "collection")
+            recipes = [r for r in results if r.get('type') == 'recipe']
 
-            data = response.content
-            html = etree.HTML(data)
-            articles = html.xpath('//article')
-            self.stdout.write(self.style.SUCCESS('Fetched {} with {} recipes'.format(url, len(articles))))
-            if articles:
-                for article in articles:
-                    recipe_url = article.attrib['data-url']
+            self.stdout.write(self.style.SUCCESS('Fetched {} with {} recipes'.format(url, len(recipes))))
+            if recipes:
+                for recipe in recipes:
+                    recipe_url = recipe.get('url')
+                    if not recipe_url:
+                        logging.warning(f'${url} is missing "url" in an article, skipping')
                     # verify it matches a recipe url pattern
                     if not re.search('^/recipes/', recipe_url):
                         continue
-                    page_recipe_urls.add(article.attrib['data-url'])
+                    page_recipe_urls.add(recipe_url)
             else:  # no more pages
-                break
+                self.stdout.write(self.style.SUCCESS('No recipes found on URl {}'.format(url)))
 
-            # validate urls in page
+            # validate urls exist in page
             if not page_recipe_urls:
-                logging.warning(f'no recipe urls for {url}')
+                logging.warning(f'no recipe urls found for {url}')
                 page += 1
                 continue
             # validate identical page
@@ -173,8 +169,8 @@ class Command(BaseCommand):
             # scrape url
             else:
                 try:
-                    content = self._get_url_content('{base_url}{url}'.format(base_url=URL_NYT, url=url))
-                except Exception as e:
+                    content = self._fetch_url_content('{base_url}{url}'.format(base_url=URL_NYT, url=url))
+                except requests.exceptions.RequestException as e:
                     logging.exception(e)
                     logging.warning('ERROR scraping url {}'.format(url))
                     continue
@@ -183,23 +179,15 @@ class Command(BaseCommand):
                     fp.write(content)
 
             # parse recipe content
-            try:
-                page_data = self._get_recipe_page_data(content)
-            except Exception as e:
+            recipe_data = self._parse_page_props(content)
+            if not recipe_data or 'recipe' not in recipe_data:
                 logging.warning('ERROR parsing {}'.format(url))
-                logging.exception(e)
                 continue
 
             if i != 0 and i % 100 == 0:
                 self.stdout.write(self.style.SUCCESS('Scraped {} recipes'.format(i)))
 
-            # validate recipe data
-            if 'props' not in page_data or 'pageProps' not in page_data['props']:
-                logging.warning(f'recipe {url} has no expected props data')
-                continue
-
             # write recipe json file
-            recipe_data = page_data['props']['pageProps']
             recipe_file = os.path.join(CACHE_DIR, f'{slug}.json')
             json.dump(recipe_data, open(recipe_file, 'w'), ensure_ascii=False, indent=2)
 
@@ -207,14 +195,9 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS('Scraped {} recipes total'.format(recipes_scraped)))
 
-    def _get_url_content(self, url) -> str:
-        response = requests.get(url)
+    def _fetch_url_content(self, url) -> str:
+        response = requests.get(url, timeout=30)
         return response.content.decode()
-
-    def _get_recipe_page_data(self, content: str) -> dict:
-        html = etree.HTML(content)
-        recipe_json = html.xpath('//script[@id="__NEXT_DATA__"]')[0]
-        return json.loads(recipe_json.text)
 
     def _scrape_images(self):
         # loop through all recipe json files
@@ -302,15 +285,15 @@ class Command(BaseCommand):
         abs_image_path = os.path.join(settings.BASE_DIR, rel_image_path)
         image_url = '/' + rel_image_path if os.path.exists(abs_image_path) else None
 
-        # update external recipe urls to internal ones
-        description = re.sub(r'{base_url}/recipes/'.format(base_url=URL_NYT), '/#/recipe/', recipe.get('topnote') or '')
-
-        ingredients = self._get_ingredients_from_recipe(recipe)
-        instructions = self._get_instructions_from_recipe(recipe)
+        # description, ingredients, & instructions
+        description = self._replace_recipe_links_to_internal(recipe.get('topnote') or '')
+        ingredients = self._replace_recipe_links_to_internal(self._get_ingredients_from_recipe(recipe))
+        instructions = self._replace_recipe_links_to_internal(self._get_instructions_from_recipe(recipe))
         if not instructions or not ingredients:
             logging.warning(f'skipping recipe {recipe_file} without ingredients or instructions')
             return None
 
+        # author
         author = recipe.get('contentAttribution', {}).get('cardByline')
 
         # create recipe
@@ -330,21 +313,32 @@ class Command(BaseCommand):
             )
         )
 
-        # combine and assign categories and keywords (they're csv strings)
+        # assign categories
         categories = [t['name'] for t in recipe.get('tags', []) if t.get('name')]
         for category in categories:
-            cat_obj = Category.objects.filter(name=category).first()
-            # only assign categories that already exist
-            if cat_obj:
-                recipe_obj.categories.add(cat_obj)
-                recipe_obj.save()
+            cat_obj, cat_created = Category.objects.get_or_create(
+                name=category.lower(),
+                # TODO - NYT recently removed the types of tags (e.g. diet, cuisine, meal-type, dish-type) so using "unknown" for now
+                # TODO - will eventually need to either manually assign categories' types or get ride of the UI that offers those filters
+                defaults=dict(
+                    type='_UNKNOWN_',
+                )
+            )
+            recipe_obj.categories.add(cat_obj)
+            recipe_obj.save()
 
         return recipe_obj
 
+    def _replace_recipe_links_to_internal(self, value: Union[str,list]) -> Union[str,list]:
+        domain_parsed = urlparse(URL_NYT)
+        re_search = r'https?://{base_url}/recipes/'.format(base_url=domain_parsed.hostname)
+        re_replace = '/#/recipe/'
+        if isinstance(value, list):
+            return [re.sub(re_search, re_replace, x) for x in value]
+        return re.sub(re_search, re_replace, value)
+
     def _scrape_and_ingest_specific_recipe(self, slug: str):
-        content = self._get_url_content(f'{URL_NYT}/recipes/{slug}')
-        page_data = self._get_recipe_page_data(content)
-        recipe_data = page_data['props']['pageProps']
+        recipe_data = self._fetch_page_props(f'{URL_NYT}/recipes/{slug}')
         recipe_file = os.path.join(CACHE_DIR, f'{slug}.json')
         json.dump(recipe_data, open(recipe_file, 'w'), ensure_ascii=False, indent=2)
         self._ingest_recipe(recipe_file)
