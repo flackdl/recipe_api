@@ -358,7 +358,7 @@
 						data () {
 							return {
 								page: 1,
-								// need to redefine these so they're available in the templates
+								// need to redefine these, so they're available in the templates
 								categoryTypeCuisines: CATEGORY_CUISINES,
 								categoryTypeMealTypes: CATEGORY_MEAL_TYPES,
 								categoryTypeDishTypes: CATEGORY_DISH_TYPES,
@@ -406,7 +406,6 @@
 								this.hideLoading();
 
 								// make copies of the filterable categories
-								//this.categoriesFiltered = data.categories ? data.categories.slice() : [];
 								this.resetCategoriesFiltered();
 
 								// initialize form state from query params

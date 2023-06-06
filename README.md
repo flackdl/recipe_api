@@ -77,3 +77,11 @@ Deploy front and back-end:
 Force scrape:
 
     docker-compose exec recipes python manage.py scrape --urls --recipes --images --ingest --force
+
+### Helpers
+
+Clear cache:
+
+    docker-compose exec recipes python manage.py shell
+    from django.core.cache import cache
+    cache.clear()
