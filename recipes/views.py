@@ -1,9 +1,5 @@
-import os
-from django.conf import settings
-from django.shortcuts import HttpResponse
+from django.views.generic import TemplateView
 
 
-def main(request):
-    # return the raw file vs rendering it since it's all vue/javascript
-    with open(os.path.join(settings.BASE_DIR, 'static', 'index.html')) as fp:
-        return HttpResponse(fp.read())
+class MainView(TemplateView):
+    template_name = 'index.html'
