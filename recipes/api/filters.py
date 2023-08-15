@@ -21,6 +21,8 @@ class RecipeFilter(filters.FilterSet):
         # custom filter to guarantee recipes only appear when they
         # include ALL the supplied categories vs when a recipe may only have one overlapping category
         categories = value
+        if not categories:
+            return queryset
         queryset = queryset.annotate(cats=ArrayAgg('categories__id'))
         queryset = queryset.filter(cats__contains=[c.id for c in categories])
         return queryset

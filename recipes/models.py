@@ -7,7 +7,7 @@ from django.db.models import Index
 
 class Recipe(models.Model):
     name = models.CharField(max_length=500)
-    slug = models.SlugField(max_length=200, unique=True, primary_key=True)
+    slug = models.SlugField(max_length=200, unique=True)
     image_path = models.CharField(max_length=210, null=True, blank=True)
     description = models.TextField()
     total_time_string = models.CharField(null=True, blank=True, max_length=100)  # human readable, e.g "1 hour"
@@ -34,7 +34,7 @@ class Recipe(models.Model):
 
 
 class Category(models.Model):
-    name = models.CharField(max_length=100, unique=True, primary_key=True)
+    name = models.CharField(max_length=100, unique=True)
     type = models.CharField(max_length=50)
 
     class Meta:
