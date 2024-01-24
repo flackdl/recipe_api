@@ -237,7 +237,8 @@ class Command(BaseCommand):
             else:
                 extension = '.jpg'
             image_name = '{}{}'.format(os.path.basename(recipe['url']), extension)
-            with open(os.path.join('static/recipes', image_name), 'wb') as out_file:
+            # write to static "output" directory
+            with open(os.path.join('staticfiles/recipes', image_name), 'wb') as out_file:
                 shutil.copyfileobj(response.raw, out_file)
             if i != 0 and i % 100 == 0:
                 self.stdout.write(self.style.SUCCESS('Downloaded {} images'.format(i)))
