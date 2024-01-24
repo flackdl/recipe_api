@@ -303,7 +303,7 @@ class Command(BaseCommand):
                 name=recipe['title'],
                 image_path=image_url,
                 description=description,
-                total_time_string=recipe['time'],
+                total_time_string=recipe.get('time'),
                 servings=recipe['recipeYield'],
                 rating_value=recipe.get('ratings', {}).get('avgRating'),
                 rating_count=recipe.get('ratings', {}).get('numRatings'),
