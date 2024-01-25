@@ -282,7 +282,7 @@ class Command(BaseCommand):
         slug = os.path.basename(recipe['url'])
 
         # set image path if it exists
-        rel_image_path = os.path.join('static', 'recipes', '{}.jpg'.format(slug))
+        rel_image_path = os.path.join('staticfiles', 'recipes', '{}.jpg'.format(slug))
         abs_image_path = os.path.join(settings.BASE_DIR, rel_image_path)
         image_url = '/' + rel_image_path if os.path.exists(abs_image_path) else None
 
