@@ -330,7 +330,7 @@ class Command(BaseCommand):
 
         return recipe_obj
 
-    def _replace_recipe_links_to_internal(self, value: Union[str,list]) -> Union[str,list]:
+    def _replace_recipe_links_to_internal(self, value: Union[str, list]) -> Union[str,list]:
         domain_parsed = urlparse(URL_NYT)
         re_search = r'https?://{base_url}/recipes/'.format(base_url=domain_parsed.hostname)
         re_replace = '/#/recipe/'
