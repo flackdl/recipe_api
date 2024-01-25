@@ -127,7 +127,8 @@ class Command(BaseCommand):
                 identical_page_failures += 1
                 self.stdout.write(self.style.WARNING(f'identical page response #{identical_page_failures} for {url}'))
                 if identical_page_failures >= 20:
-                    self.stdout.write(self.style.SUCCESS(f'Pages have been identical the last {identical_page_failures} times so stopping scrape on page {page}'))
+                    self.stdout.write(
+                        self.style.SUCCESS(f'Pages have been identical the last {identical_page_failures} times so stopping scrape on page {page}'))
                     break
             else:
                 identical_page_failures = 0
@@ -258,9 +259,9 @@ class Command(BaseCommand):
 
         # define search vector
         vector = (
-            SearchVector('name', weight='A', config=POSTGRES_LANGUAGE_UNACCENT) +
-            SearchVector(StringAgg('categories__name', ' '), weight='B', config=POSTGRES_LANGUAGE_UNACCENT) +
-            SearchVector('ingredients', weight='C', config=POSTGRES_LANGUAGE_UNACCENT)
+                SearchVector('name', weight='A', config=POSTGRES_LANGUAGE_UNACCENT) +
+                SearchVector(StringAgg('categories__name', ' '), weight='B', config=POSTGRES_LANGUAGE_UNACCENT) +
+                SearchVector('ingredients', weight='C', config=POSTGRES_LANGUAGE_UNACCENT)
         )
 
         # add search vector to all recipes
@@ -331,7 +332,7 @@ class Command(BaseCommand):
 
         return recipe_obj
 
-    def _replace_recipe_links_to_internal(self, value: Union[str, list]) -> Union[str,list]:
+    def _replace_recipe_links_to_internal(self, value: Union[str, list]) -> Union[str, list]:
         domain_parsed = urlparse(URL_NYT)
         re_search = r'https?://{base_url}/recipes/'.format(base_url=domain_parsed.hostname)
         re_replace = '/#/recipe/'
