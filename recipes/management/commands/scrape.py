@@ -283,8 +283,9 @@ class Command(BaseCommand):
 
         # set image path if it exists
         rel_image_path = os.path.join('staticfiles', 'recipes', '{}.jpg'.format(slug))
+        rel_image_path_href = os.path.join('static', 'recipes', '{}.jpg'.format(slug))
         abs_image_path = os.path.join(settings.BASE_DIR, rel_image_path)
-        image_url = '/' + rel_image_path if os.path.exists(abs_image_path) else None
+        image_url = '/' + rel_image_path_href if os.path.exists(abs_image_path) else None
 
         # description, ingredients, & instructions
         description = self._replace_recipe_links_to_internal(recipe.get('topnote') or '')
