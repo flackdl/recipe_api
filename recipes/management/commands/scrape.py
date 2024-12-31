@@ -43,7 +43,7 @@ class Command(BaseCommand):
 
         # validate required args
         if not any([options['urls'], options['recipes'], options['images'], options['ingest'], options['scrape_and_ingest_recipe_slug']]):
-            raise CommandError('Missing argument')
+            raise CommandError('Missing argument.  Run with -h to see options')
 
         self._validate_cache_path()
 
@@ -306,7 +306,7 @@ class Command(BaseCommand):
                 name=recipe['title'],
                 image_path=image_url,
                 description=description,
-                total_time_string=recipe.get('totalTime'),
+                total_time_string=recipe.get('totalTime') or recipe.get('time'),
                 servings=recipe['recipeYield'],
                 rating_value=recipe.get('ratings', {}).get('avgRating'),
                 rating_count=recipe.get('ratings', {}).get('numRatings'),
