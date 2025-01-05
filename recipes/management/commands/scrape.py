@@ -22,7 +22,6 @@ from recipes.models import Recipe, Category
 
 CACHE_DIR = '/tmp/recipes'
 URL_NYT = 'https://cooking.nytimes.com'
-CATEGORY_TYPES = ['special_diets', 'cuisines', 'meal_types', 'dish_types']
 
 
 class Command(BaseCommand):
@@ -274,11 +273,11 @@ class Command(BaseCommand):
 
     def _ingest_recipe(self, recipe_file: str) -> Union[Recipe, None]:
 
-        recipe = json.load(open(recipe_file))
-        if 'recipe' not in recipe:
+        recipe_data = json.load(open(recipe_file))
+        if 'recipe' not in recipe_data:
             logging.warning(f'skipping absent recipe in file {recipe_file}')
             return None
-        recipe = recipe['recipe']
+        recipe = recipe_data['recipe']
 
         slug = os.path.basename(recipe['url'])
 
@@ -316,21 +315,36 @@ class Command(BaseCommand):
             )
         )
 
-        # assign categories
+        # assign cuisine
+        cuisines = self._get_recipe_cuisines(recipe_data)
+        for cuisine in cuisines:
+            cuisine_obj, _ = Category.objects.get_or_create(name=cuisine, defaults=dict(type=Category.TYPE_CUISINES))
+            recipe_obj.categories.add(cuisine_obj)
+        # assign generic categories
         categories = [t['name'] for t in recipe.get('tags', []) if t.get('name')]
         for category in categories:
-            cat_obj, cat_created = Category.objects.get_or_create(
+            cat_obj, _ = Category.objects.get_or_create(
                 name=category.lower(),
-                # TODO - NYT recently removed the types of tags (e.g. diet, cuisine, meal-type, dish-type) so using "unknown" for now
+                # TODO - NYT recently removed the types of tags (e.g. diet, meal-type, dish-type) so using "unknown" for now
                 # TODO - will eventually need to either manually assign categories' types or get ride of the UI that offers those filters
                 defaults=dict(
-                    type='_UNKNOWN_',
+                    type=Category.TYPE_UNKNOWN,
                 )
             )
             recipe_obj.categories.add(cat_obj)
-            recipe_obj.save()
+
+        # save recipe after category assignments
+        recipe_obj.save()
 
         return recipe_obj
+
+    def _get_recipe_cuisines(self, recipe: dict) -> List[str]:
+        # cycle through until we find a cuisine
+        # meta->jsonLD[]->recipeCuisine
+        for json_ld in recipe.get('meta', {}).get('jsonLD', []):
+            if cuisine_csv := json_ld.get('recipeCuisine', ''):
+                return cuisine_csv.split(',')
+        return []
 
     def _replace_recipe_links_to_internal(self, value: Union[str, list]) -> Union[str, list]:
         domain_parsed = urlparse(URL_NYT)
