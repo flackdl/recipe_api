@@ -29,5 +29,9 @@ class JustTheRecipeView(APIView):
         html = req.content
         # pass the html alongside the url to our scrape_html function
         scraper = scrape_html(html, org_url=url, wild_mode=True)
+        # return original format
+        if 'original' in request.GET:
+            return Response(scraper.to_json())
+        # return serialized version
         recipe = JustTheRecipeSerializer(scraper.to_json(), many=False).data
         return Response(recipe)

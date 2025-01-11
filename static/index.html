@@ -40,6 +40,11 @@
 						About
 					</b-navbar-item>
 				</template>
+				<template slot="start">
+					<b-navbar-item tag="router-link" to="/just-the-recipe">
+						<span class="button is-success is-light">Just the Recipe</span>
+					</b-navbar-item>
+				</template>
 			</b-navbar>
 		</template>
 		<section class="section">
@@ -275,19 +280,28 @@
 					Just the Recipe
 				</h1>
 				<h2 class="subtitle">
-					Without ads or cruft
+					Paste in a recipe URL and view without all the ads or cruft
 				</h2>
+
 				<form class="columns is-multiline is-mobile" @submit="onFetchRecipe">
 					<div class="column is-10">
 						<b-field>
-							<b-input placeholder="URL..." v-model="recipeUrl" type="search" icon-pack="fas" size="is-large" icon="search"></b-input>
+							<b-input placeholder="URL..." v-model="recipeUrl" type="search" icon-pack="fas" size="is-large" icon="search" :loading="isContentLoading"></b-input>
 						</b-field>
 					</div>
 					<div class="column is-2">
-						<b-button native-type="submit" type="is-primary" size="is-large">Load</b-button>
+						<b-button native-type="submit" type="is-primary" size="is-large" :loading="isContentLoading">Load</b-button>
 					</div>
 				</form>
 				<div class="content">
+					<!-- loading skeleton -->
+					<loading-skeleton v-if="isContentLoading"></loading-skeleton>
+					<!-- error -->
+					<article class="message is-danger" v-if="error">
+						<div class="message-header"><p>Error</p></div>
+						<div class="message-body">{{ error }}</div>
+					</article>
+					<!-- recipe -->
 					<recipe :recipe="recipe"></recipe>
 				</div>
 			</div>
@@ -332,7 +346,7 @@
 			return {
 				categories: [],
 				loadingComponent: null,
-				isContentLoading: true,
+				isContentLoading: false,
 			}
 		},
 		methods: {
@@ -640,22 +654,33 @@
 						template: '#just-the-recipe',
 						mixins: [coreMixin],
 						created() {
-							this.isContentLoading = true;
 							this.recipeUrl = this.$route.query.url;
-							this.fetchRecipe();
+							if (this.recipeUrl) {
+								this.fetchRecipe();
+							}
 						},
 						data() {
 							return {
 								recipe: null,
+								error: null,
 								recipeUrl: null,
 							}
 						},
 						methods: {
 							fetchRecipe() {
+								if (!this.recipeUrl) {
+									return;
+								}
+								this.error = null;
+								this.isContentLoading = true;
 								// fetch recipe url
 								fetch(`/api/just-the-recipe/?url=${this.recipeUrl}`).then((response) => {
 									response.json().then((data) => {
 										this.recipe = data;
+										this.isContentLoading = false;
+									}).catch((error) => {
+										console.error(error);
+										this.error = 'There was an error parsing this recipe';
 										this.isContentLoading = false;
 									})
 								})
