@@ -667,6 +667,11 @@
 							}
 						},
 						methods: {
+							handleError(error) {
+								console.error(error);
+								this.error = 'There was an error parsing this recipe';
+								this.isContentLoading = false;
+							},
 							fetchRecipe() {
 								if (!this.recipeUrl) {
 									return;
@@ -675,13 +680,15 @@
 								this.isContentLoading = true;
 								// fetch recipe url
 								fetch(`/api/just-the-recipe/?url=${this.recipeUrl}`).then((response) => {
+									if (!response.ok) {
+										this.handleError('Could not parse URL');
+										return;
+									}
 									response.json().then((data) => {
 										this.recipe = data;
 										this.isContentLoading = false;
 									}).catch((error) => {
-										console.error(error);
-										this.error = 'There was an error parsing this recipe';
-										this.isContentLoading = false;
+										this.handleError(error);
 									})
 								})
 							},

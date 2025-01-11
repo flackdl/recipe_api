@@ -5,7 +5,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from recipe_scrapers import scrape_html
+from recipe_scrapers import scrape_html, NoSchemaFoundInWildMode
 
 from recipes.api.serializers import JustTheRecipeSerializer
 
@@ -20,15 +20,23 @@ class JustTheRecipeView(APIView):
 
     @method_decorator(cache_page(CACHE_DAY))
     def get(self, request):
+        # validate url exists
         if 'url' not in request.GET:
-            raise ValidationError({'url': 'Missing "url" parameter'})
+            raise ValidationError({'url': "Missing 'url' parameter"})
+        # validate url looks correct
+        if not request.GET['url'].startswith('http'):
+            raise ValidationError({'url': "Invalid 'url' parameter"})
         url = request.GET['url']
         # retrieve the recipe webpage HTML
         req = requests.get(url)
-        req.raise_for_status()
+        if req.status_code < 200 or req.status_code >= 300:
+            raise ValidationError({'url': 'URL returned an error'})
         html = req.content
         # pass the html alongside the url to our scrape_html function
-        scraper = scrape_html(html, org_url=url, wild_mode=True)
+        try:
+            scraper = scrape_html(html, org_url=url, wild_mode=True)
+        except NoSchemaFoundInWildMode:
+            raise ValidationError({'url': 'No recipe schema found for url'})
         # return original format
         if 'original' in request.GET:
             return Response(scraper.to_json())
