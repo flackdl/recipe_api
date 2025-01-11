@@ -7,6 +7,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from recipe_scrapers import scrape_html
 
+from recipes.api.serializers import JustTheRecipeSerializer
 
 CACHE_MINUTE = 60
 CACHE_HOUR = CACHE_MINUTE * 60
@@ -28,4 +29,5 @@ class JustTheRecipeView(APIView):
         html = req.content
         # pass the html alongside the url to our scrape_html function
         scraper = scrape_html(html, org_url=url, wild_mode=True)
-        return Response({'recipe': scraper.to_json()})
+        recipe = JustTheRecipeSerializer(scraper.to_json(), many=False).data
+        return Response(recipe)

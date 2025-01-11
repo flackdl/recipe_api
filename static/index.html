@@ -10,282 +10,306 @@
 	<script defer src="https://use.fontawesome.com/releases/v5.3.1/js/all.js"></script>
 	<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.2.0/css/all.css">
 	<style>
-		.recipe .tag {
-			margin: 2px 0;
-		}
-		.recipe-image {
-			object-fit: cover;
-		}
-		.text-right {
-			text-align: right;
-		}
+      .recipe .tag {
+          margin: 2px 0;
+      }
+
+      .recipe-image {
+          object-fit: cover;
+      }
+
+      .text-right {
+          text-align: right;
+      }
 	</style>
 </head>
 
 <body>
 
-	<div id="app" class="container">
-		<div>
-			<template>
-				<b-navbar>
-					<template slot="brand">
-						<b-navbar-item tag="router-link" to="/">
-							<img src="/static/logo.png">&nbsp;&nbsp;Home
-						</b-navbar-item>
-					</template>
-					<template slot="start">
-						<b-navbar-item tag="router-link" to="/api">
-							About
-						</b-navbar-item>
-					</template>
-				</b-navbar>
-			</template>
-			<section class="section">
-				<div class="container">
-					<transition>
-						<router-view></router-view>
-					</transition>
-				</div>
-			</section>
-		</div>
-	</div>
-
-	<!-- home -->
-	<script type="text/x-template" id="main">
-		<div>
-			<section class="hero">
-				<div class="hero-body">
-					<div class="container">
-						<h1 class="title">Recipe Database</h1>
-						<h2 class="subtitle">A recipe <strong>database</strong> with <router-link to="api" class="has-text-dark"><u><strong>api</strong></u></router-link> access</h2>
-					</div>
-				</div>
-			</section>
-			<div>
-				<!-- search -->
-				<form class="columns is-multiline is-mobile" @submit="onSearch">
-					<!-- search input -->
-					<div class="column is-12">
-						<b-field>
-							<b-input placeholder="Search..." id="search" v-model="searchQuery" type="search" icon-pack="fas" size="is-large" icon="search">
-							</b-input>
-						</b-field>
-					</div>
-					<!-- cuisine filter -->
-					<b-field class="column is-6">
-						<b-taginput
-							v-model="categoriesChosen[categoryTypeCuisines]"
-							:data="categoriesFiltered[categoryTypeCuisines]"
-							size="is-small"
-							icon-pack="fas"
-							icon="globe-americas"
-							type="is-info"
-							autocomplete
-							:open-on-focus="true"
-							field="name"
-							placeholder="cuisines..."
-							@add="categoryAdded"
-							@typing="setFilteredCategoriesCuisines">
-						</b-taginput>
-					</b-field>
-					<!-- meal types filter -->
-					<b-field class="column is-6">
-						<b-taginput
-							v-model="categoriesChosen[categoryTypeMealTypes]"
-							:data="categoriesFiltered[categoryTypeMealTypes]"
-							size="is-small"
-							icon-pack="fas"
-							icon="utensils"
-							type="is-info"
-							autocomplete
-							:open-on-focus="true"
-							field="name"
-							placeholder="meal types..."
-							@add="categoryAdded"
-							@typing="setFilteredCategoriesMealTypes">
-						</b-taginput>
-					</b-field>
-					<!-- dish types filter -->
-					<b-field class="column is-6">
-						<b-taginput
-							v-model="categoriesChosen[categoryTypeDishTypes]"
-							:data="categoriesFiltered[categoryTypeDishTypes]"
-							size="is-small"
-							icon-pack="fas"
-							icon="utensils"
-							type="is-info"
-							autocomplete
-							:open-on-focus="true"
-							field="name"
-							placeholder="dish types..."
-							@add="categoryAdded"
-							@typing="setFilteredCategoriesDishTypes">
-						</b-taginput>
-					</b-field>
-					<!-- special diets filter -->
-					<b-field class="column is-6">
-						<b-taginput
-							v-model="categoriesChosen[categoryTypeSpecialDiets]"
-							:data="categoriesFiltered[categoryTypeSpecialDiets]"
-							size="is-small"
-							icon-pack="fas"
-							icon="user"
-							type="is-info"
-							autocomplete
-							:open-on-focus="true"
-							field="name"
-							placeholder="special diets..."
-							@add="categoryAdded"
-							@typing="setFilteredCategoriesSpecialDiets">
-						</b-taginput>
-					</b-field>
-					<div class="field column">
-						<b-switch size="is-small" v-model="hasImage" @change.native="onSearch($event)">has image</b-switch>
-					</div>
-					<div class="column is-12 text-right">
-						<b-button native-type="submit" type="is-primary" size="is-large" :loading="isContentLoading">Search</b-button>
-					</div>
-				</form>
-
-				<!-- loading skeleton -->
-				<loading-skeleton v-if="isContentLoading"></loading-skeleton>
-
-				<!-- search results -->
-				<div v-if="!isContentLoading">
-					<div v-if="searchResults && searchResults.results.length === 0" class="notification is-warning">
-						There were no results found
-					</div>
-					<div class="section columns is-multiline" v-if="hasSearchResults()">
-						<div class="column is-12 has-text-grey-light is-size-6 text-right">
-							<div>{{ searchResults.count }} results</div>
-						</div>
-						<div class="card column is-half-tablet is-one-third-desktop" v-for="recipe in searchResults.results" :key="recipe.slug">
-							<router-link :to="{path: '/recipe/' + recipe.slug}" class="has-text-dark">
-								<div class="card-image">
-									<figure class="image is-4by3">
-										<img class="recipe-image" :src="recipe.image_path || '/static/recipes/empty.png'">
-									</figure>
-								</div>
-								<div class="card-content">
-									<div class="media">
-										<div class="media-content">
-											<recipe-header :recipe="recipe"></recipe-header>
-										</div>
-									</div>
-									<!-- description -->
-									<div class="content" v-html="recipe.description"></div>
-								</div>
-							</router-link>
-						</div>
-						<div class="column is-12 text-right" v-if="searchResults.next">
-							<button class="button is-info is-light is-large" @click="loadNextPage()">Next</button>
-						</div>
-					</div>
-				</div>
+<div id="app" class="container">
+	<div>
+		<template>
+			<b-navbar>
+				<template slot="brand">
+					<b-navbar-item tag="router-link" to="/">
+						<img src="/static/logo.png">&nbsp;&nbsp;Home
+					</b-navbar-item>
+				</template>
+				<template slot="start">
+					<b-navbar-item tag="router-link" to="/api">
+						About
+					</b-navbar-item>
+				</template>
+			</b-navbar>
+		</template>
+		<section class="section">
+			<div class="container">
+				<transition>
+					<router-view></router-view>
+				</transition>
 			</div>
-		</div>
-	</script>
-
-	<!-- loading skeleton -->
-	<script type="text/x-template" id="loading-skeleton">
-		<section>
-			<b-skeleton width="20%" :animated="true"></b-skeleton>
-			<b-skeleton width="40%" :animated="true"></b-skeleton>
-			<b-skeleton width="80%" :animated="true"></b-skeleton>
-			<b-skeleton :animated="true"></b-skeleton>
 		</section>
-	</script>
+	</div>
+</div>
 
-	<!-- recipe header -->
-	<script type="text/x-template" id="recipe-header">
-		<div class="recipe">
-			<p class="title is-4">{{ recipe.name }}</p>
-			<div class="subtitle is-6">
-				<div><span class="tag is-light">Time</span> {{ recipe.total_time_string }}</div>
-				<div><span class="tag is-light">Servings</span> {{ recipe.servings }}</div>
-				<div v-if="recipe.rating_value">
-					<span class="tag is-light">Rating</span>
-					<span v-for="rating in [1,2,3,4,5]">
-					<i class="far fa-star is-small" :class="{'has-text-success': recipe.rating_value >= rating}"></i>
-				</span>
-					<small class="has-text-grey-light">({{ recipe.rating_count }})</small>
-				</div>
-			</div>
-		</div>
-	</script>
-
-	<!-- recipe -->
-	<script type="text/x-template" id="recipe">
-		<div>
-			<loading-skeleton v-if="isContentLoading"></loading-skeleton>
-			<div v-if="!isContentLoading" class="card">
-				<div class="card-content">
-					<div class="media">
-						<div class="media-content">
-							<recipe-header :recipe="recipe"></recipe-header>
-							<a :href="tag.link" v-for="tag in getTags()" class="tag is-link is-light is-rounded">{{ tag.label }}</a>
-						</div>
-					</div>
-					<div class="content">
-						<div class="columns">
-							<div class="column" v-html="recipe.description"></div>
-							<div class="column">
-								<figure class="image">
-									<img :src="recipe.image_path">
-								</figure>
-							</div>
-						</div>
-						<div class="columns">
-							<div class="column is-6">
-								<h2>Ingredients</h2>
-								<div v-for="ingredient in recipe.ingredients">
-									<h6 v-if="isSectionHeader(ingredient)" class="my-3">{{ sanitizeSectionHeader(ingredient) }}</h6>
-									<div class="box my-1" v-if="!isSectionHeader(ingredient)">
-										<span v-html="ingredient"></span>
-									</div>
-								</div>
-							</div>
-							<div class="column is-6">
-								<h2>Instructions</h2>
-								<div v-for="instruction in recipe.instructions">
-									<h6 v-if="isSectionHeader(instruction)" class="my-3">{{ sanitizeSectionHeader(instruction) }}</h6>
-									<div class="box my-1" v-if="!isSectionHeader(instruction)">
-										<span v-html="instruction"></span>
-									</div>
-								</div>
-							</div>
-						</div>
-					</div>
-				</div>
-			</div>
-		</div>
-  </script>
-
-	<!-- api -->
-	<script type="text/x-template" id="api">
+<!-- home -->
+<script type="text/x-template" id="main">
+	<div>
 		<section class="hero">
 			<div class="hero-body">
 				<div class="container">
-					<h1 class="title">
-						Recipe API
-					</h1>
-					<h2 class="subtitle">
-						The recipe database is powered by a public REST API.  The code is open source.
+					<h1 class="title">Recipe Database</h1>
+					<h2 class="subtitle">A recipe <strong>database</strong> with
+						<router-link to="api" class="has-text-dark"><u><strong>api</strong></u></router-link>
+						access
 					</h2>
-					<div class="content">
-						<ul>
-							<li>
-								<a href="/api/">api</a>
-							</li>
-							<li>
-								<a href="https://github.com/flackdl/recipe_api">source code</a>
-							</li>
-						</ul>
-					</div>
 				</div>
 			</div>
 		</section>
-  </script>
+		<div>
+			<!-- search -->
+			<form class="columns is-multiline is-mobile" @submit="onSearch">
+				<!-- search input -->
+				<div class="column is-12">
+					<b-field>
+						<b-input placeholder="Search..." id="search" v-model="searchQuery" type="search" icon-pack="fas" size="is-large" icon="search">
+						</b-input>
+					</b-field>
+				</div>
+				<!-- cuisine filter -->
+				<b-field class="column is-6">
+					<b-taginput
+						v-model="categoriesChosen[categoryTypeCuisines]"
+						:data="categoriesFiltered[categoryTypeCuisines]"
+						size="is-small"
+						icon-pack="fas"
+						icon="globe-americas"
+						type="is-info"
+						autocomplete
+						:open-on-focus="true"
+						field="name"
+						placeholder="cuisines..."
+						@add="categoryAdded"
+						@typing="setFilteredCategoriesCuisines">
+					</b-taginput>
+				</b-field>
+				<!-- meal types filter -->
+				<b-field class="column is-6">
+					<b-taginput
+						v-model="categoriesChosen[categoryTypeMealTypes]"
+						:data="categoriesFiltered[categoryTypeMealTypes]"
+						size="is-small"
+						icon-pack="fas"
+						icon="utensils"
+						type="is-info"
+						autocomplete
+						:open-on-focus="true"
+						field="name"
+						placeholder="meal types..."
+						@add="categoryAdded"
+						@typing="setFilteredCategoriesMealTypes">
+					</b-taginput>
+				</b-field>
+				<!-- dish types filter -->
+				<b-field class="column is-6">
+					<b-taginput
+						v-model="categoriesChosen[categoryTypeDishTypes]"
+						:data="categoriesFiltered[categoryTypeDishTypes]"
+						size="is-small"
+						icon-pack="fas"
+						icon="utensils"
+						type="is-info"
+						autocomplete
+						:open-on-focus="true"
+						field="name"
+						placeholder="dish types..."
+						@add="categoryAdded"
+						@typing="setFilteredCategoriesDishTypes">
+					</b-taginput>
+				</b-field>
+				<!-- special diets filter -->
+				<b-field class="column is-6">
+					<b-taginput
+						v-model="categoriesChosen[categoryTypeSpecialDiets]"
+						:data="categoriesFiltered[categoryTypeSpecialDiets]"
+						size="is-small"
+						icon-pack="fas"
+						icon="user"
+						type="is-info"
+						autocomplete
+						:open-on-focus="true"
+						field="name"
+						placeholder="special diets..."
+						@add="categoryAdded"
+						@typing="setFilteredCategoriesSpecialDiets">
+					</b-taginput>
+				</b-field>
+				<div class="field column">
+					<b-switch size="is-small" v-model="hasImage" @change.native="onSearch($event)">has image</b-switch>
+				</div>
+				<div class="column is-12 text-right">
+					<b-button native-type="submit" type="is-primary" size="is-large" :loading="isContentLoading">Search</b-button>
+				</div>
+			</form>
+
+			<!-- loading skeleton -->
+			<loading-skeleton v-if="isContentLoading"></loading-skeleton>
+
+			<!-- search results -->
+			<div v-if="!isContentLoading">
+				<div v-if="searchResults && searchResults.results.length === 0" class="notification is-warning">
+					There were no results found
+				</div>
+				<div class="section columns is-multiline" v-if="hasSearchResults()">
+					<div class="column is-12 has-text-grey-light is-size-6 text-right">
+						<div>{{ searchResults.count }} results</div>
+					</div>
+					<div class="card column is-half-tablet is-one-third-desktop" v-for="recipe in searchResults.results" :key="recipe.slug">
+						<router-link :to="{path: '/recipe/' + recipe.slug}" class="has-text-dark">
+							<div class="card-image">
+								<figure class="image is-4by3">
+									<img class="recipe-image" :src="recipe.image_path || '/static/recipes/empty.png'">
+								</figure>
+							</div>
+							<div class="card-content">
+								<div class="media">
+									<div class="media-content">
+										<recipe-header :recipe="recipe"></recipe-header>
+									</div>
+								</div>
+								<!-- description -->
+								<div class="content" v-html="recipe.description"></div>
+							</div>
+						</router-link>
+					</div>
+					<div class="column is-12 text-right" v-if="searchResults.next">
+						<button class="button is-info is-light is-large" @click="loadNextPage()">Next</button>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+</script>
+
+<!-- loading skeleton -->
+<script type="text/x-template" id="loading-skeleton">
+	<section>
+		<b-skeleton width="20%" :animated="true"></b-skeleton>
+		<b-skeleton width="40%" :animated="true"></b-skeleton>
+		<b-skeleton width="80%" :animated="true"></b-skeleton>
+		<b-skeleton :animated="true"></b-skeleton>
+	</section>
+</script>
+
+<!-- recipe header -->
+<script type="text/x-template" id="recipe-header">
+	<div class="recipe" v-if="recipe">
+		<p class="title is-4">{{ recipe.name }}</p>
+		<div class="subtitle is-6">
+			<div><span class="tag is-light">Time</span> {{ recipe.total_time_string }}</div>
+			<div><span class="tag is-light">Servings</span> {{ recipe.servings }}</div>
+			<div v-if="recipe.rating_value">
+				<span class="tag is-light">Rating</span>
+				<span v-for="rating in [1,2,3,4,5]">
+					<i class="far fa-star is-small" :class="{'has-text-success': recipe.rating_value >= rating}"></i>
+				</span>
+				<small class="has-text-grey-light">({{ recipe.rating_count }})</small>
+			</div>
+		</div>
+	</div>
+</script>
+
+<!-- recipe -->
+<script type="text/x-template" id="recipe">
+	<div>
+		<loading-skeleton v-if="isContentLoading"></loading-skeleton>
+		<div v-if="!isContentLoading && recipe" class="card">
+			<div class="card-content">
+				<div class="media">
+					<div class="media-content">
+						<recipe-header :recipe="recipe"></recipe-header>
+						<a :href="tag.link" v-for="tag in getTags()" class="tag is-link is-light is-rounded">{{ tag.label }}</a>
+					</div>
+				</div>
+				<div class="content">
+					<div class="columns">
+						<div class="column" v-html="recipe.description"></div>
+						<div class="column">
+							<figure class="image">
+								<img :src="recipe.image_path">
+							</figure>
+						</div>
+					</div>
+					<div class="columns">
+						<div class="column is-6">
+							<h2>Ingredients</h2>
+							<div v-for="ingredient in recipe.ingredients">
+								<h6 v-if="isSectionHeader(ingredient)" class="my-3">{{ sanitizeSectionHeader(ingredient) }}</h6>
+								<div class="box my-1" v-if="!isSectionHeader(ingredient)">
+									<span v-html="ingredient"></span>
+								</div>
+							</div>
+						</div>
+						<div class="column is-6">
+							<h2>Instructions</h2>
+							<div v-for="instruction in recipe.instructions">
+								<h6 v-if="isSectionHeader(instruction)" class="my-3">{{ sanitizeSectionHeader(instruction) }}</h6>
+								<div class="box my-1" v-if="!isSectionHeader(instruction)">
+									<span v-html="instruction"></span>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+</script>
+
+<!-- just the recipe -->
+<script type="text/x-template" id="just-the-recipe">
+	<section class="hero">
+		<div class="hero-body">
+			<div class="container">
+				<h1 class="title">
+					Just the Recipe
+				</h1>
+				<h2 class="subtitle">
+					No ads or cruft
+				</h2>
+				<div class="content">
+					<recipe :recipe="recipe"></recipe>
+				</div>
+			</div>
+		</div>
+	</section>
+</script>
+
+<!-- api -->
+<script type="text/x-template" id="api">
+	<section class="hero">
+		<div class="hero-body">
+			<div class="container">
+				<h1 class="title">
+					Recipe API
+				</h1>
+				<h2 class="subtitle">
+					The recipe database is powered by a public REST API. The code is open source.
+				</h2>
+				<div class="content">
+					<ul>
+						<li>
+							<a href="/api/">api</a>
+						</li>
+						<li>
+							<a href="https://github.com/flackdl/recipe_api">source code</a>
+						</li>
+					</ul>
+				</div>
+			</div>
+		</div>
+	</section>
+</script>
 
 <script src="https://unpkg.com/vue@2.6.11/dist/vue.js"></script>
 <script src="https://unpkg.com/buefy@0.8.17/dist/buefy.min.js"></script>
@@ -305,21 +329,21 @@
 			showLoading() {
 				this.loadingComponent = this.$buefy.loading.open();
 			},
-			hideLoading () {
+			hideLoading() {
 				this.loadingComponent.close();
 			},
 			loadCoreData() {
 				return rxjs.ajax.ajax.getJSON('/api/category/').pipe(
-						rxjs.operators.map((data) => {
-							// only include categories with a type
-							this.categories = data.filter((category) => {
-								return category.type;
-							});
-							return {
-								categories: this.categories,
-							};
-						}),
-					);
+					rxjs.operators.map((data) => {
+						// only include categories with a type
+						this.categories = data.filter((category) => {
+							return category.type;
+						});
+						return {
+							categories: this.categories,
+						};
+					}),
+				);
 			},
 		}
 	}
@@ -333,10 +357,22 @@
 	Vue.component('recipe-header', {
 		props: ['recipe'],
 		data: function () {
-			return {
-			}
+			return {}
 		},
 		template: '#recipe-header',
+	});
+
+	// recipe component
+	Vue.component('recipe', {
+		props: ['recipe', 'isContentLoading'],
+		data: function () {
+			return {}
+		},
+		methods: {
+			getTags() {},
+			isSectionHeader() {}
+		},
+		template: '#recipe',
 	});
 
 	const CATEGORY_CUISINES = 'cuisines';
@@ -350,12 +386,13 @@
 		mixins: [coreMixin],
 		router: new VueRouter({
 			routes: [
-				{ path: '/',
+				{
+					path: '/',
 					name: 'main',
 					component: {
 						template: '#main',
 						mixins: [coreMixin],
-						data () {
+						data() {
 							return {
 								page: 1,
 								// need to redefine these, so they're available in the templates
@@ -381,7 +418,7 @@
 								pageTitle: document.title,
 							}
 						},
-						beforeRouteUpdate (to, from, next) {
+						beforeRouteUpdate(to, from, next) {
 							// handle route changes in the same component since the normal life cycle hooks aren't called
 							this.searchQuery = to.query.search || '';
 							this.page = to.query.page || 1;
@@ -394,7 +431,7 @@
 							this.search();
 							next();
 						},
-						created () {
+						created() {
 
 							// reset page title
 							document.title = this.pageTitle;
@@ -464,14 +501,14 @@
 										.indexOf(text.toLowerCase()) >= 0
 								});
 							},
-							onSearch (e) {
+							onSearch(e) {
 								// reset page since it's a new search
 								this.page = 1;
 								this.search();
 								this.updateUrlParams();
 								e.preventDefault();
 							},
-							search () {
+							search() {
 								this.isContentLoading = true;
 
 								// blur the input so the keyboard disappears on mobile devices
@@ -534,12 +571,13 @@
 						}
 					}
 				},
-				{ path: '/recipe/:slug',
+				{
+					path: '/recipe/:slug',
 					name: 'recipe',
 					component: {
 						template: '#recipe',
 						mixins: [coreMixin],
-						created () {
+						created() {
 
 							// load core data
 							this.loadCoreData().subscribe(() => {
@@ -560,7 +598,7 @@
 								})
 							})
 						},
-						data () {
+						data() {
 							return {
 								recipe: null,
 							}
@@ -585,7 +623,37 @@
 						}
 					},
 				},
-				{ path: '/api', name: 'api', component: { template: '#api' }},
+				{
+					path: '/just-the-recipe',
+					name: 'just-the-recipe',
+					component: {
+						template: '#just-the-recipe',
+						mixins: [coreMixin],
+						created() {
+							this.isContentLoading = true;
+							const url = 'https://www.allrecipes.com/recipe/158968/spinach-and-feta-turkey-burgers/';
+							// fetch recipe
+							fetch(`/api/just-the-recipe/?url=${url}`).then((response) => {
+								response.json().then((data) => {
+									this.recipe = data;
+									this.isContentLoading = false;
+								})
+							})
+						},
+						data() {
+							return {
+								isContentLoading: true,
+								recipe: null,
+							}
+						},
+						methods: {
+							getTags() {
+								return [];
+							},
+						}
+					}
+				},
+				{path: '/api', name: 'api', component: {template: '#api'}},
 			],
 		}),
 	});
