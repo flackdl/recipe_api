@@ -34,15 +34,13 @@
 					<b-navbar-item tag="router-link" to="/">
 						<img src="/static/logo.png">&nbsp;&nbsp;Home
 					</b-navbar-item>
+					<b-navbar-item tag="router-link" to="/just-the-recipe">
+						<span class="button is-success is-light">Just the Recipe</span>
+					</b-navbar-item>
 				</template>
 				<template slot="start">
 					<b-navbar-item tag="router-link" to="/api">
 						About
-					</b-navbar-item>
-				</template>
-				<template slot="start">
-					<b-navbar-item tag="router-link" to="/just-the-recipe">
-						<span class="button is-success is-light">Just the Recipe</span>
 					</b-navbar-item>
 				</template>
 			</b-navbar>
@@ -283,7 +281,7 @@
 					Paste in a recipe URL and view without all the ads or cruft
 				</h2>
 
-				<form class="columns is-multiline is-mobile" @submit="onFetchRecipe">
+				<form class="columns is-multiline" @submit="onFetchRecipe">
 					<div class="column is-10">
 						<b-field>
 							<b-input placeholder="URL..." v-model="recipeUrl" type="search" icon-pack="fas" size="is-large" icon="search" :loading="isContentLoading"></b-input>
