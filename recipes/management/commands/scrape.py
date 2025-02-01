@@ -340,11 +340,19 @@ class Command(BaseCommand):
 
     def _get_recipe_cuisines(self, recipe: dict) -> List[str]:
         # cycle through until we find a cuisine
-        # meta->jsonLD[]->recipeCuisine
-        for json_ld in recipe.get('meta', {}).get('jsonLD', []):
-            if cuisine_csv := json_ld.get('recipeCuisine', ''):
-                return cuisine_csv.split(',')
-        return []
+        # meta->jsonLD->recipeCuisine
+        meta = recipe.get('meta', {})
+        json_ld = meta.get('jsonLD', {})
+        cuisine_csv = ''
+        # handle scenario where json_ld is a list
+        if isinstance(json_ld, list):
+            for json_ld in meta.get('jsonLD', []):
+                if cuisine_csv := json_ld.get('recipeCuisine', ''):
+                    break
+        # otherwise it should be a dictionary
+        else:
+            cuisine_csv = json_ld.get('recipeCuisine', '')
+        return cuisine_csv.split(',')
 
     def _replace_recipe_links_to_internal(self, value: Union[str, list]) -> Union[str, list]:
         domain_parsed = urlparse(URL_NYT)

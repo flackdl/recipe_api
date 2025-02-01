@@ -14,6 +14,8 @@ CACHE_HOUR = CACHE_MINUTE * 60
 CACHE_HALF_DAY = CACHE_HOUR * 12
 CACHE_DAY = CACHE_HALF_DAY * 2
 
+# TODO - rate limit
+# https://django-ratelimit.readthedocs.io/en/stable/
 
 class JustTheRecipeView(APIView):
     permission_classes = (AllowAny,)
