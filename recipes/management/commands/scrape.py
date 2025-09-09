@@ -208,6 +208,12 @@ class Command(BaseCommand):
                 logging.warning(f'skipping absent recipe record {recipe_file}')
                 continue
             recipe = recipe['recipe']
+
+            # validate url exists
+            if not recipe.get('url'):
+                logging.warning(f'skipping absent url from recipe record {recipe_file}')
+                continue
+
             slug = os.path.basename(recipe['url'])
 
             recipe_exists = self._recipe_exists(slug=slug)
