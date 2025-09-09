@@ -285,6 +285,11 @@ class Command(BaseCommand):
             return None
         recipe = recipe_data['recipe']
 
+        # validate url exists
+        if not recipe.get('url'):
+            logging.warning(f'skipping absent url from recipe record {recipe_file}')
+            return None
+
         slug = os.path.basename(recipe['url'])
 
         # set image path if it exists
@@ -412,11 +417,10 @@ class Command(BaseCommand):
         return re.search('/assets/\d+\.(png|jpg|jpeg)', image_path, re.I)
 
     def _get_image_url_from_recipe(self, recipe: dict):
-        if not recipe:
-            return
-        if recipe.get('image'):
+        if recipe and recipe.get('image'):
             if recipe['image'].get('src'):
                 return recipe['image']['src'].get('article')
+        return None
 
     def _validate_cache_path(self):
         # create cache dir if it doesn't exist
