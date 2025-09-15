@@ -47,9 +47,6 @@ class Command(BaseCommand):
             self._scrape_urls()
         if options['recipes']:
             self.scrape_recipes()
-            # TODO - is this necessary?
-            # collect static files since we scraped new images
-            call_command('collectstatic', interactive=False)
 
         # clear cache
         cache.clear()
