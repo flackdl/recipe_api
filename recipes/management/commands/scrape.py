@@ -199,7 +199,6 @@ class Command(BaseCommand):
         # parse recipe
         scraper = scrape_html(response.content, org_url=url, wild_mode=True)
         recipe_data = scraper.to_json()
-        json.dump(recipe_data, open('/tmp/b.json', 'w'), indent=2)
         # validate it has ingredients
         if not recipe_data.get('ingredients'):
             raise Exception(f'skipping recipe {url} without ingredients or instructions')
