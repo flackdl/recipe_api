@@ -1,12 +1,11 @@
 import errno
 import os
 import re
-from glob import glob
 import shutil
 import sys
 import json
 import logging
-from typing import List, Union
+from typing import Union, Tuple
 from urllib.parse import urlparse
 import requests
 from django.contrib.postgres.aggregates import StringAgg
@@ -16,6 +15,7 @@ from django.conf import settings
 from django.contrib.postgres.search import SearchVector
 from django.core.management.base import BaseCommand, CommandError
 from django.core.cache import cache
+from recipe_scrapers import scrape_html
 
 from recipe_api.settings import POSTGRES_LANGUAGE_UNACCENT
 from recipes.models import Recipe, Category
@@ -31,17 +31,14 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument('--urls', action='store_true', help='Captures all recipe urls')
         parser.add_argument('--recipes', action='store_true', help='Captures all recipes')
-        parser.add_argument('--images', action='store_true', help='Downloads all recipe images')
-        parser.add_argument('--ingest', action='store_true', help='Ingests recipes into db')
         parser.add_argument('--force', action='store_true', help='Forces an update')
-        parser.add_argument('--scrape_and_ingest_recipe_slug', help="Manually scrape and ingest a specific recipe using it's slug")
 
     def handle(self, *args, **options):
 
         self.force = options['force']
 
         # validate required args
-        if not any([options['urls'], options['recipes'], options['images'], options['ingest'], options['scrape_and_ingest_recipe_slug']]):
+        if not any([options['urls'], options['recipes']]):
             raise CommandError('Missing argument.  Run with -h to see options')
 
         self._validate_cache_path()
@@ -49,18 +46,36 @@ class Command(BaseCommand):
         if options['urls']:
             self._scrape_urls()
         if options['recipes']:
-            self._scrape_recipes()
-        if options['images']:
-            self._scrape_images()
+            self.scrape_recipes()
+            # TODO - is this necessary?
             # collect static files since we scraped new images
             call_command('collectstatic', interactive=False)
-        if options['ingest']:
-            self._ingest_recipes()
-        if options['scrape_and_ingest_recipe_slug']:
-            self._scrape_and_ingest_specific_recipe(options['scrape_and_ingest_recipe_slug'])
 
         # clear cache
         cache.clear()
+
+    def scrape_recipes(self):
+
+        self._scrape_recipes()
+
+        # define search vector
+        vector = (
+                SearchVector('name', weight='A', config=POSTGRES_LANGUAGE_UNACCENT) +
+                SearchVector(StringAgg('categories__name', ' '), weight='B', config=POSTGRES_LANGUAGE_UNACCENT) +
+                SearchVector('ingredients', weight='C', config=POSTGRES_LANGUAGE_UNACCENT)
+        )
+
+        # add search vector to all recipes
+        # NOTE: it's necessary to do it one by one since django doesn't support updates on aggregates (e.g., categories)
+        for recipe in Recipe.objects.annotate(vector=vector):
+            recipe.search_vector = recipe.vector
+            recipe.save()
+
+        self.stdout.write(self.style.SUCCESS('Complete'))
+
+    def _fetch_url_content(self, url) -> str:
+        response = requests.get(url, timeout=30)
+        return response.content.decode()
 
     def _fetch_page_props(self, url: str) -> dict:
         content = self._fetch_url_content(url)
@@ -89,10 +104,10 @@ class Command(BaseCommand):
                 props = self._fetch_page_props(url)
             except requests.exceptions.RequestException as e:
                 logging.warning(e)
-                # repeat requests few times on failures
+                # repeat requests a few times for failures
                 self.stdout.write(self.style.WARNING('Bad sequential response #{} for {}'.format(sequential_failures, url)))
                 sequential_failures += 1
-                # too many consecutive errors for this page - go to next page
+                # too many consecutive errors for this page - go to the next page
                 if sequential_failures > 5:
                     self.stdout.write(self.style.WARNING('Too many failures for {}, continuing'.format(url)))
                     page += 1
@@ -100,7 +115,7 @@ class Command(BaseCommand):
 
             sequential_failures = 0
             results = props.get('results', [])
-            # filter to type: recipe (e.g. not "collection")
+            # filter to type: recipe (e.g., not "collection")
             recipes = [r for r in results if r.get('type') == 'recipe']
 
             self.stdout.write(self.style.SUCCESS('Fetched {} with {} recipes'.format(url, len(recipes))))
@@ -116,7 +131,7 @@ class Command(BaseCommand):
             else:  # no more pages
                 self.stdout.write(self.style.SUCCESS('No recipes found on URl {}'.format(url)))
 
-            # validate urls exist in page
+            # validate urls exist in the page
             if not page_recipe_urls:
                 logging.warning(f'no recipe urls found for {url}')
                 page += 1
@@ -145,12 +160,10 @@ class Command(BaseCommand):
 
         # validate the input urls file
         if not os.path.exists(urls_file):
-            self.stdout.write(self.style.ERROR('"urls.json" does not exist.  Run with --urls first'))
+            self.stdout.write(self.style.ERROR(f'"{urls_file}" does not exist.  Run with --urls first'))
             sys.exit(1)
 
         self.stdout.write(self.style.SUCCESS('Scraping recipes'))
-
-        using_cached = 0
 
         for i, url in enumerate(json.load(open(urls_file, 'r'))['urls']):
             slug = os.path.basename(url)
@@ -159,211 +172,96 @@ class Command(BaseCommand):
             if not self.force and self._recipe_exists(slug=slug):
                 continue
 
-            cache_path = os.path.join(CACHE_DIR, slug)
-
-            # use cache if it exists
-            if not self.force and os.path.exists(cache_path):
-                content = open(cache_path, 'r').read()
-                if using_cached != 0 and using_cached % 100 == 0:
-                    logging.warning('Used {} cached pages'.format(using_cached))
-            # scrape url
-            else:
-                try:
-                    content = self._fetch_url_content('{base_url}{url}'.format(base_url=URL_NYT, url=url))
-                except requests.exceptions.RequestException as e:
-                    logging.exception(e)
-                    logging.warning('ERROR scraping url {}'.format(url))
-                    continue
-                # store cached version
-                with open(cache_path, 'w') as fp:
-                    fp.write(content)
-
-            # parse recipe content
-            recipe_data = self._parse_page_props(content)
-            if not recipe_data or 'recipe' not in recipe_data:
-                logging.warning('ERROR parsing {}'.format(url))
+            # scrape recipe
+            try:
+                recipe, image_url = self._scrape_recipe_url('{base_url}{url}'.format(base_url=URL_NYT, url=url))
+            except Exception as e:
+                logging.exception(e)
+                logging.warning('ERROR scraping url {}'.format(url))
                 continue
 
-            if i != 0 and i % 100 == 0:
-                self.stdout.write(self.style.SUCCESS('Scraped {} recipes'.format(i)))
+            # scrape image
+            try:
+                self._scrape_recipe_image(recipe, image_url)
+            except Exception as e:
+                logging.exception(e)
+                self.stdout.write(self.style.ERROR('Could not download image {} for {}'.format(image_url, recipe)))
 
-            # write recipe json file
-            recipe_file = os.path.join(CACHE_DIR, f'{slug}.json')
-            json.dump(recipe_data, open(recipe_file, 'w'), ensure_ascii=False, indent=2)
+            if i != 0 and i % 100 == 0:
+                self.stdout.write(self.style.SUCCESS('Scraped {} recipes so far'.format(i)))
 
             recipes_scraped += 1
 
         self.stdout.write(self.style.SUCCESS('Scraped {} recipes total'.format(recipes_scraped)))
 
-    def _fetch_url_content(self, url) -> str:
-        response = requests.get(url, timeout=30)
-        return response.content.decode()
+    def _scrape_recipe_url(self, url: str) -> Tuple[Recipe, str]:
+        # return Recipe and external image url
 
-    def _scrape_images(self):
-        # loop through all recipe json files
-        recipe_files = self._get_recipe_json_files()
-        for i, recipe_file in enumerate(recipe_files):
-            recipe = json.load(open(recipe_file))
-            if not recipe or not recipe.get('recipe'):
-                logging.warning(f'skipping absent recipe record {recipe_file}')
-                continue
-            recipe = recipe['recipe']
-
-            # validate url exists
-            if not recipe.get('url'):
-                logging.warning(f'skipping absent url from recipe record {recipe_file}')
-                continue
-
-            slug = os.path.basename(recipe['url'])
-
-            recipe_exists = self._recipe_exists(slug=slug)
-
-            image_url = self._get_image_url_from_recipe(recipe)
-
-            # skip empty/placeholder images
-            if not image_url or self._is_placeholder_image(image_url):
-                logging.warning(f'skipping absent image for {recipe_file}')
-                continue
-
-            # skip recipes we've already imported
-            if not self.force and recipe_exists:
-                continue
-
-            try:
-                response = requests.get(image_url, stream=True)
-                response.raise_for_status()
-            except Exception as e:
-                logging.exception(e)
-                self.stdout.write(self.style.ERROR('Could not download image {} for {}'.format(image_url, recipe['name'])))
-                continue
-            # use image extension for new name based on slug
-            extension_match = re.match(r'.*(\.\w{3})$', os.path.basename(image_url))
-            if extension_match:
-                extension = extension_match.groups()[0]
-            else:
-                extension = '.jpg'
-            image_name = '{}{}'.format(os.path.basename(recipe['url']), extension)
-            # write to static "output" directory
-            with open(os.path.join('staticfiles/recipes', image_name), 'wb') as out_file:
-                shutil.copyfileobj(response.raw, out_file)
-            if i != 0 and i % 100 == 0:
-                self.stdout.write(self.style.SUCCESS('Downloaded {} images'.format(i)))
-
-        self.stdout.write(self.style.SUCCESS('Completed images'))
-
-    def _ingest_recipes(self):
-        num_ingested = 0
-
-        # loop through all recipe json files
-        recipe_files = self._get_recipe_json_files()
-        for i, recipe_file in enumerate(recipe_files):
-            if self._ingest_recipe(recipe_file):
-                num_ingested += 1
-            if i != 0 and i % 100 == 0:
-                self.stdout.write(self.style.SUCCESS('Ingested {} recipes'.format(num_ingested)))
-
-        # define search vector
-        vector = (
-                SearchVector('name', weight='A', config=POSTGRES_LANGUAGE_UNACCENT) +
-                SearchVector(StringAgg('categories__name', ' '), weight='B', config=POSTGRES_LANGUAGE_UNACCENT) +
-                SearchVector('ingredients', weight='C', config=POSTGRES_LANGUAGE_UNACCENT)
-        )
-
-        # add search vector to all recipes
-        # NOTE: it's necessary to do it one by one since django doesn't support updates on aggregates (e.g. categories)
-        for recipe in Recipe.objects.annotate(vector=vector):
-            recipe.search_vector = recipe.vector
-            recipe.save()
-
-        self.stdout.write(self.style.SUCCESS(f'Complete: ingested {num_ingested} recipes'))
-
-    def _ingest_recipe(self, recipe_file: str) -> Union[Recipe, None]:
-
-        recipe_data = json.load(open(recipe_file))
-        if 'recipe' not in recipe_data:
-            logging.warning(f'skipping absent recipe in file {recipe_file}')
-            return None
-        recipe = recipe_data['recipe']
-
-        # validate url exists
-        if not recipe.get('url'):
-            logging.warning(f'skipping absent url from recipe record {recipe_file}')
-            return None
-
-        slug = os.path.basename(recipe['url'])
-
-        # set image path if it exists
-        rel_image_path = os.path.join('staticfiles', 'recipes', '{}.jpg'.format(slug))
-        rel_image_path_href = os.path.join('static', 'recipes', '{}.jpg'.format(slug))
-        abs_image_path = os.path.join(settings.BASE_DIR, rel_image_path)
-        image_url = '/' + rel_image_path_href if os.path.exists(abs_image_path) else None
-
-        # description, ingredients, & instructions
-        description = self._replace_recipe_links_to_internal(recipe.get('topnote') or '')
-        ingredients = self._replace_recipe_links_to_internal(self._get_ingredients_from_recipe(recipe))
-        instructions = self._replace_recipe_links_to_internal(self._get_instructions_from_recipe(recipe))
-        if not instructions or not ingredients:
-            logging.warning(f'skipping recipe {recipe_file} without ingredients or instructions')
-            return None
-
-        # author
-        author = recipe.get('contentAttribution', {}).get('cardByline')
-
-        # create recipe
-        recipe_obj, _ = Recipe.objects.update_or_create(
-            slug=slug,
+        # fetch url
+        response = requests.get(url, timeout=20)
+        # parse recipe
+        scraper = scrape_html(response.content, org_url=url, wild_mode=True)
+        recipe_data = scraper.to_json()
+        json.dump(recipe_data, open('/tmp/b.json', 'w'), indent=2)
+        # validate it has ingredients
+        if not recipe_data.get('ingredients'):
+            raise Exception(f'skipping recipe {url} without ingredients or instructions')
+        # save recipe
+        recipe, _ = Recipe.objects.update_or_create(
+            slug=os.path.basename(url),
             defaults=dict(
-                name=recipe['title'],
-                image_path=image_url,
-                description=description,
-                total_time_string=recipe.get('totalTime') or recipe.get('time'),
-                servings=recipe['recipeYield'],
-                rating_value=recipe.get('ratings', {}).get('avgRating'),
-                rating_count=recipe.get('ratings', {}).get('numRatings'),
-                ingredients=ingredients,
-                instructions=instructions,
-                author=author[:100],
-            )
+                name=recipe_data.get('title'),
+                description=self._replace_recipe_links_to_internal(recipe_data.get('description')),
+                total_time_string=f"{recipe_data.get('total_time')} min",
+                servings=recipe_data.get('yields'),
+                rating_value=recipe_data.get('ratings'),
+                rating_count=recipe_data.get('ratings_count'),
+                ingredients=self._replace_recipe_links_to_internal(recipe_data.get('ingredients')),
+                instructions=self._replace_recipe_links_to_internal(recipe_data.get('instructions_list')),
+                author=recipe_data.get('author'),
+            ),
         )
-
-        # assign cuisine
-        cuisines = self._get_recipe_cuisines(recipe_data)
-        for cuisine in cuisines:
-            cuisine_obj, _ = Category.objects.get_or_create(name=cuisine, defaults=dict(type=Category.TYPE_CUISINES))
-            recipe_obj.categories.add(cuisine_obj)
-        # assign generic categories
-        categories = [t['name'] for t in recipe.get('tags', []) if t.get('name')]
-        for category in categories:
-            cat_obj, _ = Category.objects.get_or_create(
-                name=category.lower(),
-                # TODO - NYT recently removed the types of tags (e.g. diet, meal-type, dish-type) so using "unknown" for now
-                # TODO - will eventually need to either manually assign categories' types or get ride of the UI that offers those filters
+        # set categories/keywords
+        categories = []
+        for keyword in scraper.keywords():
+            category, _ = Category.objects.update_or_create(
+                name=keyword.lower(),
                 defaults=dict(
                     type=Category.TYPE_UNKNOWN,
-                )
+                ),
             )
-            recipe_obj.categories.add(cat_obj)
+        recipe.categories.set(categories)
 
-        # save recipe after category assignments
-        recipe_obj.save()
+        return recipe, scraper.image()
 
-        return recipe_obj
+    def _scrape_recipe_image(self, recipe, image_url: str):
 
-    def _get_recipe_cuisines(self, recipe: dict) -> List[str]:
-        # cycle through until we find a cuisine
-        # meta->jsonLD->recipeCuisine
-        meta = recipe.get('meta', {})
-        json_ld = meta.get('jsonLD', {})
-        cuisine_csv = ''
-        # handle scenario where json_ld is a list
-        if isinstance(json_ld, list):
-            for json_ld in meta.get('jsonLD', []):
-                if cuisine_csv := json_ld.get('recipeCuisine', ''):
-                    break
-        # otherwise it should be a dictionary
+        # use image extension for the new name based on slug
+        extension_match = re.match(r'.*(\.\w{3})$', os.path.basename(image_url))
+        if extension_match:
+            extension = extension_match.groups()[0]
         else:
-            cuisine_csv = json_ld.get('recipeCuisine', '')
-        return cuisine_csv.split(',')
+            extension = '.jpg'
+
+        # define image name and output path
+        image_name = '{}{}'.format(recipe.slug, extension)
+        image_path_file = os.path.join(f'{settings.STATIC_ROOT}/recipes', image_name)
+
+        # skip images we've already scraped
+        if os.path.exists(image_path_file):
+            return
+
+        # fetch image
+        response = requests.get(image_url, stream=True, timeout=20)
+        response.raise_for_status()
+
+        # write to the static "output" directory
+        with open(image_path_file, 'wb') as out_file:
+            shutil.copyfileobj(response.raw, out_file)
+
+        # save the recipe with the new image path
+        recipe.image_path = f'/{settings.STATIC_URL}recipes/{image_name}'
+        recipe.save()
 
     def _replace_recipe_links_to_internal(self, value: Union[str, list]) -> Union[str, list]:
         domain_parsed = urlparse(URL_NYT)
@@ -373,54 +271,8 @@ class Command(BaseCommand):
             return [re.sub(re_search, re_replace, x) for x in value]
         return re.sub(re_search, re_replace, value)
 
-    def _scrape_and_ingest_specific_recipe(self, slug: str):
-        recipe_data = self._fetch_page_props(f'{URL_NYT}/recipes/{slug}')
-        recipe_file = os.path.join(CACHE_DIR, f'{slug}.json')
-        json.dump(recipe_data, open(recipe_file, 'w'), ensure_ascii=False, indent=2)
-        self._ingest_recipe(recipe_file)
-        self.stdout.write(self.style.SUCCESS('Scraped & ingested recipe: {} to {}'.format(slug, recipe_file)))
-
-    def _get_ingredients_from_recipe(self, recipe: dict) -> List:
-        ingredients = []
-        for ingredient in recipe.get('ingredients', []):
-            if 'ingredients' in ingredient:
-                # section name
-                if ingredient.get('name'):
-                    ingredients.append(f'@@{ingredient["name"]}@@')
-                for sub_ingredient in ingredient['ingredients']:
-                    ingredients.append(f"{sub_ingredient['quantity']} {sub_ingredient['text']}")
-            else:
-                ingredients.append(f"{ingredient['quantity']} {ingredient['text']}")
-        return ingredients
-
-    def _get_instructions_from_recipe(self, recipe: dict) -> List:
-        instructions = []
-        for instruction in recipe.get('steps', []):
-            # section with nested steps
-            if 'name' in instruction:
-                if instruction.get('name'):
-                    instructions.append(f'@@{instruction["name"]}@@')
-                for inner_step in instruction.get('steps', []):
-                    instructions.append(inner_step['description'])
-            else:  # single section steps
-                instructions.append(instruction['description'])
-        return instructions
-
-    def _get_recipe_json_files(self) -> List[str]:
-        return glob(os.path.join(CACHE_DIR, '*.json'))
-
     def _recipe_exists(self, slug):
         return Recipe.objects.filter(slug=slug).exists()
-
-    def _is_placeholder_image(self, image_path: str):
-        # placeholder images are like https://static01.nyt.com/applications/cooking/5b227f9/assets/15.png
-        return re.search('/assets/\d+\.(png|jpg|jpeg)', image_path, re.I)
-
-    def _get_image_url_from_recipe(self, recipe: dict):
-        if recipe and recipe.get('image'):
-            if recipe['image'].get('src'):
-                return recipe['image']['src'].get('article')
-        return None
 
     def _validate_cache_path(self):
         # create cache dir if it doesn't exist
