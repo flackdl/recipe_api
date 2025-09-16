@@ -171,7 +171,7 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS('Scraping recipes'))
 
-        # build a list of recipe slugs: existing and scraped slugs
+        # build a list of all recipe urls: existing and newly scraped
         urls_existing = [f'/recipes/{slug}' for slug in list(Recipe.objects.values_list('slug', flat=True))]
         urls_scraped = json.load(open(urls_file, 'r'))['urls']
         urls_all = set(urls_existing + urls_scraped)
