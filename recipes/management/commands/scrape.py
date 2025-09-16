@@ -209,7 +209,7 @@ class Command(BaseCommand):
                 name=recipe_data.get('title'),
                 description=self._replace_recipe_links_to_internal(recipe_data.get('description')),
                 total_time_string=f"{recipe_data.get('total_time')} min",
-                servings=recipe_data.get('yields'),
+                servings=recipe_data.get('yields') or '',
                 rating_value=recipe_data.get('ratings'),
                 rating_count=recipe_data.get('ratings_count'),
                 ingredients=self._replace_recipe_links_to_internal(recipe_data.get('ingredients')),
