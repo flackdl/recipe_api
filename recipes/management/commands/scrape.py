@@ -255,7 +255,7 @@ class Command(BaseCommand):
                 shutil.copyfileobj(response.raw, out_file)
 
         # save the recipe with the new image path
-        recipe.image_path = f'/{settings.STATIC_URL}recipes/{image_name}'
+        recipe.image_path = f'{settings.STATIC_URL}recipes/{image_name}'
         recipe.save()
 
     def _replace_recipe_links_to_internal(self, value: Union[str, list]) -> Union[str, list]:
