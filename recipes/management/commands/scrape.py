@@ -243,17 +243,16 @@ class Command(BaseCommand):
         image_name = '{}{}'.format(recipe.slug, extension)
         image_path_file = os.path.join(f'{settings.STATIC_ROOT}/recipes', image_name)
 
-        # skip images we've already scraped
-        if os.path.exists(image_path_file):
-            return
+        # download images we haven't already scraped
+        if not os.path.exists(image_path_file):
 
-        # fetch image
-        response = requests.get(image_url, stream=True, timeout=20)
-        response.raise_for_status()
+            # fetch image
+            response = requests.get(image_url, stream=True, timeout=20)
+            response.raise_for_status()
 
-        # write to the static "output" directory
-        with open(image_path_file, 'wb') as out_file:
-            shutil.copyfileobj(response.raw, out_file)
+            # write to the static "output" directory
+            with open(image_path_file, 'wb') as out_file:
+                shutil.copyfileobj(response.raw, out_file)
 
         # save the recipe with the new image path
         recipe.image_path = f'/{settings.STATIC_URL}recipes/{image_name}'
