@@ -171,7 +171,12 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS('Scraping recipes'))
 
-        for i, url in enumerate(json.load(open(urls_file, 'r'))['urls']):
+        # build a list of recipe slugs: existing and scraped slugs
+        urls_existing = [f'/recipes/{slug}' for slug in list(Recipe.objects.values_list('slug', flat=True))]
+        urls_scraped = json.load(open(urls_file, 'r'))['urls']
+        urls_all = set(urls_existing + urls_scraped)
+
+        for i, url in enumerate(urls_all):
             slug = os.path.basename(url)
 
             # skip if we already have this recipe imported
