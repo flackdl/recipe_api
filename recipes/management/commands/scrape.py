@@ -240,6 +240,7 @@ class Command(BaseCommand):
                     type=Category.TYPE_UNKNOWN,
                 ),
             )
+            categories.append(category)
         recipe.categories.set(categories)
 
         return recipe, scraper.image()
