@@ -9,7 +9,6 @@ from typing import Union, Tuple
 from urllib.parse import urlparse
 import requests
 from django.contrib.postgres.aggregates import StringAgg
-from django.core.management import call_command
 from lxml import etree
 from django.conf import settings
 from django.contrib.postgres.search import SearchVector
@@ -29,8 +28,9 @@ class Command(BaseCommand):
     force = False
 
     def add_arguments(self, parser):
-        parser.add_argument('--urls', action='store_true', help='Captures all recipe urls')
-        parser.add_argument('--recipes', action='store_true', help='Captures all recipes')
+        parser.add_argument('--urls', action='store_true', help='Scrapes all recipe urls')
+        parser.add_argument('--recipes', action='store_true', help='Scrapes all recipes')
+        parser.add_argument('--specific-recipe-slug', help='Scrapes a specific recipe')
         parser.add_argument('--force', action='store_true', help='Forces an update')
 
     def handle(self, *args, **options):
@@ -38,7 +38,7 @@ class Command(BaseCommand):
         self.force = options['force']
 
         # validate required args
-        if not any([options['urls'], options['recipes']]):
+        if not any([options['urls'], options['recipes'], options['specific_recipe_slug']]):
             raise CommandError('Missing argument.  Run with -h to see options')
 
         self._validate_cache_path()
@@ -47,9 +47,16 @@ class Command(BaseCommand):
             self._scrape_urls()
         if options['recipes']:
             self.scrape_recipes()
+        if options['specific_recipe_slug']:
+            self.scrape_specific_recipe(options['specific_recipe_slug'])
 
         # clear cache
         cache.clear()
+
+    def scrape_specific_recipe(self, slug: str):
+        recipe, image_url = self._scrape_recipe_url('{base_url}/recipes/{slug}'.format(base_url=URL_NYT, slug=slug))
+        self._scrape_recipe_image(recipe, image_url)
+        self.stdout.write(self.style.SUCCESS('Completed scraping {}'.format(recipe)))
 
     def scrape_recipes(self):
 
@@ -61,6 +68,8 @@ class Command(BaseCommand):
                 SearchVector(StringAgg('categories__name', ' '), weight='B', config=POSTGRES_LANGUAGE_UNACCENT) +
                 SearchVector('ingredients', weight='C', config=POSTGRES_LANGUAGE_UNACCENT)
         )
+
+        self.stdout.write(self.style.SUCCESS('Creating search vectors'))
 
         # add search vector to all recipes
         # NOTE: it's necessary to do it one by one since django doesn't support updates on aggregates (e.g., categories)

@@ -1,4 +1,4 @@
-FROM python:3.11-buster
+FROM python:3.11-bullseye
 ADD . /app
 WORKDIR /app
 RUN pip install -U pip
