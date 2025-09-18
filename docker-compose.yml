@@ -1,5 +1,3 @@
-version: '2.2'
-
 services:
 
   caddy:
@@ -28,17 +26,19 @@ services:
       - postgres
     labels:
       # routinely check for new recipes
-      deck-chores.new-recipes.command: python manage.py scrape --urls --recipes --images --ingest
+      deck-chores.new-recipes.command: python manage.py scrape --urls --recipes
       deck-chores.new-recipes.interval: weekly
       # update all recipes less frequently
-      deck-chores.update-recipes.command: python manage.py scrape --urls --recipes --images --ingest --force
+      deck-chores.update-recipes.command: python manage.py scrape --urls --recipes --force
       deck-chores.update-recipes.interval: 30 days
 
   postgres:
-    image: postgres:11
-    # NOTE: use "expose" in production
-    ports:
-      - "5432:5432"
+    image: postgres:17
+    # NOTE: use "ports" in development
+    #ports:
+    #  - "5432:5432"
+    expose:
+      - 5432
     environment:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
     volumes:
