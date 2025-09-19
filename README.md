@@ -27,7 +27,7 @@ This is an open source recipe database and api.
 
 Start postgres:
 
-    docker-compose up -d postgres
+    docker compose up -d postgres
     
 Install python dependencies:
 
@@ -62,26 +62,26 @@ URL: http://localhost:8000
 
 Bring up everything:
 
-    docker-compose up -d
+    docker compose up -d
 
 Deploy front-end updates:
 
     git pull
-    docker-compose up --force-recreate -d recipes
+    docker compose up --force-recreate -d recipes
 
 Deploy front and back-end:
 
     git pull
-    docker-compose up --build --force-recreate -d recipes
+    docker compose up --build --force-recreate -d recipes
 
 Force scrape:
 
-    docker-compose exec recipes python manage.py scrape --urls --recipes --force
+    docker compose exec recipes python manage.py scrape --urls --recipes --force
 
 ### Helpers
 
 Clear cache:
 
-    docker-compose exec recipes python manage.py shell
+    docker compose exec recipes python manage.py shell
     from django.core.cache import cache
     cache.clear()
