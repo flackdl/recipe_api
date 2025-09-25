@@ -11,7 +11,6 @@ from recipes.models import Recipe, Category
 
 
 class RecipeFilter(filters.FilterSet):
-    has_image = filters.BooleanFilter(field_name="image_path", lookup_expr='isnull', label='Has Image', exclude=True)
     categories = ModelMultipleChoiceFilter(
         queryset=Category.objects.all(),
         method='filter_categories',
