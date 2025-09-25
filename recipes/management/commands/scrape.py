@@ -198,7 +198,6 @@ class Command(BaseCommand):
                 logging.exception(e)
                 self.stdout.write(self.style.ERROR('Could not download image {} for {}'.format(image_url, recipe)))
 
-            # TODO - need to fix exiting loop early and not counting correctly
             if i != 0 and i % 100 == 0:
                 self.stdout.write(self.style.SUCCESS('Scraped {} recipes so far'.format(i)))
 
