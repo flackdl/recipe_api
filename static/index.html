@@ -10,9 +10,6 @@
 	<script defer src="https://use.fontawesome.com/releases/v5.3.1/js/all.js"></script>
 	<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.2.0/css/all.css">
 	<style>
-      .recipe .tag {
-          margin: 2px 0;
-      }
 
       .recipe-image {
           object-fit: cover;
@@ -78,77 +75,6 @@
 						<b-input placeholder="Search..." id="search" v-model="searchQuery" type="search" icon-pack="fas" size="is-large" icon="search">
 						</b-input>
 					</b-field>
-				</div>
-				<!-- cuisine filter -->
-				<b-field class="column is-6">
-					<b-taginput
-						v-model="categoriesChosen[categoryTypeCuisines]"
-						:data="categoriesFiltered[categoryTypeCuisines]"
-						size="is-small"
-						icon-pack="fas"
-						icon="globe-americas"
-						type="is-info"
-						autocomplete
-						:open-on-focus="true"
-						field="name"
-						placeholder="cuisines..."
-						@add="categoryAdded"
-						@typing="setFilteredCategoriesCuisines">
-					</b-taginput>
-				</b-field>
-				<!-- meal types filter -->
-				<b-field class="column is-6">
-					<b-taginput
-						v-model="categoriesChosen[categoryTypeMealTypes]"
-						:data="categoriesFiltered[categoryTypeMealTypes]"
-						size="is-small"
-						icon-pack="fas"
-						icon="utensils"
-						type="is-info"
-						autocomplete
-						:open-on-focus="true"
-						field="name"
-						placeholder="meal types..."
-						@add="categoryAdded"
-						@typing="setFilteredCategoriesMealTypes">
-					</b-taginput>
-				</b-field>
-				<!-- dish types filter -->
-				<b-field class="column is-6">
-					<b-taginput
-						v-model="categoriesChosen[categoryTypeDishTypes]"
-						:data="categoriesFiltered[categoryTypeDishTypes]"
-						size="is-small"
-						icon-pack="fas"
-						icon="utensils"
-						type="is-info"
-						autocomplete
-						:open-on-focus="true"
-						field="name"
-						placeholder="dish types..."
-						@add="categoryAdded"
-						@typing="setFilteredCategoriesDishTypes">
-					</b-taginput>
-				</b-field>
-				<!-- special diets filter -->
-				<b-field class="column is-6">
-					<b-taginput
-						v-model="categoriesChosen[categoryTypeSpecialDiets]"
-						:data="categoriesFiltered[categoryTypeSpecialDiets]"
-						size="is-small"
-						icon-pack="fas"
-						icon="user"
-						type="is-info"
-						autocomplete
-						:open-on-focus="true"
-						field="name"
-						placeholder="special diets..."
-						@add="categoryAdded"
-						@typing="setFilteredCategoriesSpecialDiets">
-					</b-taginput>
-				</b-field>
-				<div class="field column">
-					<b-switch size="is-small" v-model="hasImage" @change.native="onSearch($event)">has image</b-switch>
 				</div>
 				<div class="column is-12 text-right">
 					<b-button native-type="submit" type="is-primary" size="is-large" :loading="isContentLoading">Search</b-button>
@@ -231,7 +157,6 @@
 				<div class="media">
 					<div class="media-content">
 						<recipe-header :recipe="recipe"></recipe-header>
-						<a :href="tag.link" v-for="tag in getTags()" class="tag is-link is-light is-rounded">{{ tag.label }}</a>
 					</div>
 				</div>
 				<div class="content">
@@ -342,7 +267,6 @@
 	let coreMixin = {
 		data() {
 			return {
-				categories: [],
 				loadingComponent: null,
 				isContentLoading: false,
 			}
@@ -353,19 +277,6 @@
 			},
 			hideLoading() {
 				this.loadingComponent.close();
-			},
-			loadCoreData() {
-				return rxjs.ajax.ajax.getJSON('/api/category/').pipe(
-					rxjs.operators.map((data) => {
-						// only include categories with a type
-						this.categories = data.filter((category) => {
-							return category.type;
-						});
-						return {
-							categories: this.categories,
-						};
-					}),
-				);
 			},
 		}
 	}
@@ -391,16 +302,10 @@
 			return {}
 		},
 		methods: {
-			getTags() {},
 			isSectionHeader() {}
 		},
 		template: '#recipe',
 	});
-
-	const CATEGORY_CUISINES = 'cuisines';
-	const CATEGORY_MEAL_TYPES = 'meal_types';
-	const CATEGORY_DISH_TYPES = 'dish_types';
-	const CATEGORY_SPECIAL_DIETS = 'special_diets';
 
 	// main app
 	let app = new Vue({
@@ -417,26 +322,8 @@
 						data() {
 							return {
 								page: 1,
-								// need to redefine these, so they're available in the templates
-								categoryTypeCuisines: CATEGORY_CUISINES,
-								categoryTypeMealTypes: CATEGORY_MEAL_TYPES,
-								categoryTypeDishTypes: CATEGORY_DISH_TYPES,
-								categoryTypeSpecialDiets: CATEGORY_SPECIAL_DIETS,
-								categoriesFiltered: {
-									[CATEGORY_CUISINES]: [],
-									[CATEGORY_MEAL_TYPES]: [],
-									[CATEGORY_DISH_TYPES]: [],
-									[CATEGORY_SPECIAL_DIETS]: [],
-								},
-								categoriesChosen: {
-									[CATEGORY_CUISINES]: [],
-									[CATEGORY_MEAL_TYPES]: [],
-									[CATEGORY_DISH_TYPES]: [],
-									[CATEGORY_SPECIAL_DIETS]: [],
-								},
 								searchQuery: '',
 								searchResults: null,
-								hasImage: true,
 								pageTitle: document.title,
 							}
 						},
@@ -444,12 +331,6 @@
 							// handle route changes in the same component since the normal life cycle hooks aren't called
 							this.searchQuery = to.query.search || '';
 							this.page = to.query.page || 1;
-							this.categoriesChosen = {
-								[CATEGORY_CUISINES]: this.filterCategoryObjectsFromIdsAndType(to.query.categories || [], CATEGORY_CUISINES),
-								[CATEGORY_MEAL_TYPES]: this.filterCategoryObjectsFromIdsAndType(to.query.categories || [], CATEGORY_MEAL_TYPES),
-								[CATEGORY_DISH_TYPES]: this.filterCategoryObjectsFromIdsAndType(to.query.categories || [], CATEGORY_DISH_TYPES),
-								[CATEGORY_SPECIAL_DIETS]: this.filterCategoryObjectsFromIdsAndType(to.query.categories || [], CATEGORY_SPECIAL_DIETS),
-							}
 							this.search();
 							next();
 						},
@@ -458,70 +339,16 @@
 							// reset page title
 							document.title = this.pageTitle;
 
-							this.showLoading();
+							// initialize form state from query params
+							this.searchQuery = this.$route.query.search || '';
+							this.page = parseInt(this.$route.query.page || 1);
 
-							// fetch core data
-							this.loadCoreData().subscribe(() => {
-								this.hideLoading();
-
-								// make copies of the filterable categories
-								this.resetCategoriesFiltered();
-
-								// initialize form state from query params
-								this.searchQuery = this.$route.query.search || '';
-								this.page = parseInt(this.$route.query.page || 1);
-								this.categoriesChosen = {
-									[CATEGORY_CUISINES]: this.filterCategoryObjectsFromIdsAndType(this.$route.query.categories || [], CATEGORY_CUISINES),
-									[CATEGORY_MEAL_TYPES]: this.filterCategoryObjectsFromIdsAndType(this.$route.query.categories || [], CATEGORY_MEAL_TYPES),
-									[CATEGORY_DISH_TYPES]: this.filterCategoryObjectsFromIdsAndType(this.$route.query.categories || [], CATEGORY_DISH_TYPES),
-									[CATEGORY_SPECIAL_DIETS]: this.filterCategoryObjectsFromIdsAndType(this.$route.query.categories || [], CATEGORY_SPECIAL_DIETS),
-								}
-
-								// search
-								this.search();
-							});
+							// search
+							this.search();
 						},
 						methods: {
-							filterCategoryObjectsFromIdsAndType(ids, type) {
-								// coerce a list
-								ids = Array.isArray(ids) ? ids : [ids];
-								return this.categories.filter((category) => {
-									return category.type === type && ids.includes(String(category.id));
-								});
-							},
-							resetCategoriesFiltered() {
-								// reset all the filtered categories
-								for (let type of Object.getOwnPropertyNames(this.categoriesFiltered)) {
-									this.categoriesFiltered[type] = this.categories.filter((category) => {
-										return category.type === type;
-									});
-								}
-							},
 							hasSearchResults() {
 								return this.searchResults && this.searchResults.results.length > 0;
-							},
-							categoryAdded() {
-								// reset the categories choices
-								this.resetCategoriesFiltered();
-							},
-							setFilteredCategoriesCuisines(text) {
-								return this.setFilteredCategories(CATEGORY_CUISINES, text);
-							},
-							setFilteredCategoriesMealTypes(text) {
-								return this.setFilteredCategories(CATEGORY_MEAL_TYPES, text);
-							},
-							setFilteredCategoriesDishTypes(text) {
-								return this.setFilteredCategories(CATEGORY_DISH_TYPES, text);
-							},
-							setFilteredCategoriesSpecialDiets(text) {
-								return this.setFilteredCategories(CATEGORY_SPECIAL_DIETS, text);
-							},
-							setFilteredCategories(catType, text) {
-								this.categoriesFiltered[catType] = this.categories.filter((category) => {
-									return category.type === catType && category.name
-										.toLowerCase()
-										.indexOf(text.toLowerCase()) >= 0
-								});
 							},
 							onSearch(e) {
 								// reset page since it's a new search
@@ -534,7 +361,10 @@
 								this.isContentLoading = true;
 
 								// blur the input so the keyboard disappears on mobile devices
-								document.querySelector('#search').blur();
+								let searchEl = document.querySelector('#search');
+								if (searchEl) {
+									searchEl.blur();
+								}
 
 								// fetch recipes
 								this.fetchRecipes().then(() => {
@@ -571,19 +401,6 @@
 							},
 							getSearchUrlParams() {
 								let params = [];
-
-								// build category filters
-								Object.getOwnPropertyNames(this.categoriesChosen).forEach((type) => {
-									if (this.categoriesChosen[type].length) {
-										this.categoriesChosen[type].forEach((category) => {
-											params.push(`categories=${category.id}`)
-										});
-									}
-								});
-								// add image filter
-								if (this.hasImage) {
-									params = params.concat([`has_image=${this.hasImage}`]);
-								}
 								// add page filter
 								params = params.concat([`page=${this.page}`]);
 
@@ -600,12 +417,6 @@
 						template: '#recipe',
 						mixins: [coreMixin],
 						created() {
-
-							// load core data
-							this.loadCoreData().subscribe(() => {
-							}, (error) => {
-								console.error(error);
-							});
 
 							this.isContentLoading = true;
 
@@ -626,16 +437,6 @@
 							}
 						},
 						methods: {
-							getTags() {
-								return this.categories.filter((category) => {
-									return this.recipe.categories.includes(category.id);
-								}).map((object) => {
-									return {
-										label: object.name,
-										link: `#/?categories=${object.id}`,
-									};
-								});
-							},
 							isSectionHeader(value) {
 								return /@@.*@@/.test(value);
 							},
