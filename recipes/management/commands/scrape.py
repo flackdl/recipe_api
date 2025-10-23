@@ -233,7 +233,7 @@ class Command(BaseCommand):
         if not recipe_data.get('ingredients'):
             raise Exception(f'skipping recipe {url} without ingredients or instructions')
         # handle ingredient groups by flattening them with special characters defining the group name
-        if len(recipe_data.get('ingredient_groups')) > 1:
+        if len(recipe_data.get('ingredient_groups', [])) > 1:
             # convert ingredient groups into a custom/flat list
             recipe_data['ingredients'] = self._convert_ingredient_groups(recipe_data)
         # save the recipe
