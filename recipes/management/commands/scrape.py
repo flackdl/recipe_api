@@ -55,6 +55,11 @@ class Command(BaseCommand):
 
     def scrape_specific_recipe(self, slug: str):
         recipe, image_url = self._scrape_recipe_url('{base_url}/recipes/{slug}'.format(base_url=URL_NYT, slug=slug.strip()))
+        # save search vector
+        vector = self._get_search_vector()
+        for recipe in Recipe.objects.filter(slug=slug).annotate(vector=vector):
+            recipe.search_vector = recipe.vector
+            recipe.save()
         self._scrape_recipe_image(recipe, image_url)
         self.stdout.write(self.style.SUCCESS('Completed scraping {}'.format(recipe)))
 
@@ -63,11 +68,7 @@ class Command(BaseCommand):
         self._scrape_recipes()
 
         # define search vector
-        vector = (
-                SearchVector('name', weight='A', config=POSTGRES_LANGUAGE_UNACCENT) +
-                SearchVector(StringAgg('categories__name', ' '), weight='B', config=POSTGRES_LANGUAGE_UNACCENT) +
-                SearchVector('ingredients', weight='C', config=POSTGRES_LANGUAGE_UNACCENT)
-        )
+        vector = self._get_search_vector()
 
         self.stdout.write(self.style.SUCCESS('Creating search vectors'))
 
@@ -78,6 +79,13 @@ class Command(BaseCommand):
             recipe.save()
 
         self.stdout.write(self.style.SUCCESS('Complete'))
+
+    def _get_search_vector(self):
+        return (
+                SearchVector('name', weight='A', config=POSTGRES_LANGUAGE_UNACCENT) +
+                SearchVector(StringAgg('categories__name', ' '), weight='B', config=POSTGRES_LANGUAGE_UNACCENT) +
+                SearchVector('ingredients', weight='C', config=POSTGRES_LANGUAGE_UNACCENT)
+        )
 
     def _fetch_url_content(self, url) -> str:
         response = requests.get(url, timeout=30)
@@ -169,12 +177,12 @@ class Command(BaseCommand):
             self.stdout.write(self.style.ERROR(f'"{urls_file}" does not exist.  Run with --urls first'))
             sys.exit(1)
 
-        self.stdout.write(self.style.SUCCESS('Scraping recipes'))
-
         # build a list of all recipe urls: existing and newly scraped
         urls_existing = [f'/recipes/{slug}' for slug in list(Recipe.objects.values_list('slug', flat=True))]
         urls_scraped = json.load(open(urls_file, 'r'))['urls']
         urls_all = set(urls_existing + urls_scraped)
+
+        self.stdout.write(self.style.SUCCESS(f'Scraping {len(urls_all)} recipes'))
 
         for i, url in enumerate(urls_all):
             slug = os.path.basename(url)
@@ -205,6 +213,14 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS('Scraped {} recipes total'.format(recipes_scraped)))
 
+    def _convert_ingredient_groups(self, recipe_data: dict) -> list:
+        ingredients = []
+        for i, group in enumerate(recipe_data.get('ingredient_groups', [])):
+            # define as "@@group@@" for UI to recognize a new group
+            ingredients.append('@@' + (group.get('purpose') or f'Group {i+1}') + '@@')
+            ingredients.extend(group.get('ingredients'))
+        return ingredients
+
     def _scrape_recipe_url(self, url: str) -> Tuple[Recipe, str]:
         # return Recipe and external image url
 
@@ -216,7 +232,11 @@ class Command(BaseCommand):
         # validate it has ingredients
         if not recipe_data.get('ingredients'):
             raise Exception(f'skipping recipe {url} without ingredients or instructions')
-        # save recipe
+        # handle ingredient groups by flattening them with special characters defining the group name
+        if len(recipe_data.get('ingredient_groups', [])) > 1:
+            # convert ingredient groups into a custom/flat list
+            recipe_data['ingredients'] = self._convert_ingredient_groups(recipe_data)
+        # save the recipe
         recipe, _ = Recipe.objects.update_or_create(
             slug=os.path.basename(url),
             defaults=dict(
