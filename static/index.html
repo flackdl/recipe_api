@@ -135,9 +135,9 @@
 	<div class="recipe" v-if="recipe">
 		<p class="title is-4">{{ recipe.name }}</p>
 		<div class="subtitle is-6">
-			<div><span class="tag is-light">Time</span> {{ recipe.total_time_string }}</div>
-			<div><span class="tag is-light">Servings</span> {{ recipe.servings }}</div>
-			<div v-if="recipe.rating_value">
+			<div class="my-1"><span class="tag is-light">Time</span> {{ recipe.total_time_string }}</div>
+			<div class="my-1"><span class="tag is-light">Servings</span> {{ recipe.servings }}</div>
+			<div class="my-1" v-if="recipe.rating_value">
 				<span class="tag is-light">Rating</span>
 				<span v-for="rating in [1,2,3,4,5]">
 					<i class="far fa-star is-small" :class="{'has-text-success': recipe.rating_value >= rating}"></i>
@@ -203,9 +203,8 @@
 					Just the Recipe
 				</h1>
 				<h2 class="subtitle">
-					Paste in a recipe URL and view without all the ads or cruft
+					Paste in a recipe URL from anywhere and view it without all the ads or nonsense.
 				</h2>
-
 				<form class="columns is-multiline" @submit="onFetchRecipe">
 					<div class="column is-10">
 						<b-field>
