@@ -28,6 +28,8 @@ class JustTheRecipeView(APIView):
         'Accept-Encoding': 'gzip, deflate, br',
         'Connection': 'keep-alive',
         'Upgrade-Insecure-Requests': '1',
+        'Cookie': 'session_id=abc12345; user_preferences=dark_mode; __cf_bm=somehashvalue',  # fake cookies
+        'Referer': 'https://www.google.com/',
     }
 
     @method_decorator(cache_page(CACHE_DAY))
