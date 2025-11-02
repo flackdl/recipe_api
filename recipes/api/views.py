@@ -42,7 +42,11 @@ class JustTheRecipeView(APIView):
         # retrieve the recipe webpage HTML
         req = requests.get(url, headers=self.headers, timeout=20)
         if req.status_code < 200 or req.status_code >= 300:
-            raise ValidationError({'url': 'URL returned an error'})
+            raise ValidationError({
+                'url': 'URL returned an error',
+                'status_code': req.status_code,
+                'content': req.content,
+            })
         html = req.content
         # pass the html alongside the url to our scrape_html function
         try:
