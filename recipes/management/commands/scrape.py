@@ -260,8 +260,12 @@ class Command(BaseCommand):
             ),
         )
         # set categories/keywords
+        try:
+            keywords = scraper.keywords() or []
+        except Exception:
+            keywords = []
         categories = []
-        for keyword in scraper.keywords():
+        for keyword in keywords:
             category, _ = Category.objects.update_or_create(
                 name=keyword.lower(),
                 defaults=dict(
