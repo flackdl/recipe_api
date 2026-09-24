@@ -12,7 +12,7 @@ class Recipe(models.Model):
     description = models.TextField()
     total_time_string = models.CharField(null=True, blank=True, max_length=100)  # human readable, e.g "1 hour"
     servings = models.CharField(max_length=100)
-    rating_value = models.IntegerField(null=True, blank=True)
+    rating_value = models.FloatField(null=True, blank=True)
     rating_count = models.IntegerField(null=True, blank=True)
     ingredients = fields.ArrayField(base_field=models.CharField(max_length=1500))
     instructions = fields.ArrayField(base_field=models.CharField(max_length=3000))

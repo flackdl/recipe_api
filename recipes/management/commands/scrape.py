@@ -21,6 +21,14 @@ from recipes.models import Recipe, Category
 
 CACHE_DIR = '/tmp/recipes'
 URL_NYT = 'https://cooking.nytimes.com'
+REQUEST_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.5',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Connection': 'keep-alive',
+    'Upgrade-Insecure-Requests': '1',
+}
 
 
 class Command(BaseCommand):
@@ -88,7 +96,7 @@ class Command(BaseCommand):
         )
 
     def _fetch_url_content(self, url) -> str:
-        response = requests.get(url, timeout=30)
+        response = requests.get(url, timeout=30, headers=REQUEST_HEADERS)
         return response.content.decode()
 
     def _fetch_page_props(self, url: str) -> dict:
@@ -218,14 +226,14 @@ class Command(BaseCommand):
         for i, group in enumerate(recipe_data.get('ingredient_groups', [])):
             # define as "@@group@@" for UI to recognize a new group
             ingredients.append('@@' + (group.get('purpose') or f'Group {i+1}') + '@@')
-            ingredients.extend(group.get('ingredients'))
+            ingredients.extend(group.get('ingredients') or [])
         return ingredients
 
     def _scrape_recipe_url(self, url: str) -> Tuple[Recipe, str]:
         # return Recipe and external image url
 
         # fetch url
-        response = requests.get(url, timeout=20)
+        response = requests.get(url, timeout=20, headers=REQUEST_HEADERS)
         # parse recipe
         scraper = scrape_html(response.content, org_url=url, wild_mode=True)
         recipe_data = scraper.to_json()
@@ -241,13 +249,13 @@ class Command(BaseCommand):
             slug=os.path.basename(url),
             defaults=dict(
                 name=recipe_data.get('title'),
-                description=self._replace_recipe_links_to_internal(recipe_data.get('description')),
-                total_time_string=f"{recipe_data.get('total_time')} min",
+                description=self._replace_recipe_links_to_internal(recipe_data.get('description') or ''),
+                total_time_string=(f"{recipe_data.get('total_time')} min" if recipe_data.get('total_time') else ''),
                 servings=recipe_data.get('yields') or '',
                 rating_value=recipe_data.get('ratings'),
                 rating_count=recipe_data.get('ratings_count'),
-                ingredients=self._replace_recipe_links_to_internal(recipe_data.get('ingredients')),
-                instructions=self._replace_recipe_links_to_internal(recipe_data.get('instructions_list')),
+                ingredients=self._replace_recipe_links_to_internal(self._clean_list(recipe_data.get('ingredients'))),
+                instructions=self._replace_recipe_links_to_internal(self._clean_list(recipe_data.get('instructions_list'))),
                 author=recipe_data.get('author'),
             ),
         )
@@ -293,7 +301,16 @@ class Command(BaseCommand):
         recipe.image_path = f'{settings.STATIC_URL}recipes/{image_name}'
         recipe.save()
 
+    def _clean_list(self, value):
+        if value is None:
+            return []
+        if isinstance(value, list):
+            return [x for x in value if x is not None and x != 'None']
+        return value
+
     def _replace_recipe_links_to_internal(self, value: Union[str, list]) -> Union[str, list]:
+        if value is None:
+            return value
         domain_parsed = urlparse(URL_NYT)
         re_search = r'https?://{base_url}/recipes/'.format(base_url=domain_parsed.hostname)
         re_replace = '/#/recipe/'
