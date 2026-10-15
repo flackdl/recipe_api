@@ -79,6 +79,15 @@
 						</b-input>
 					</b-field>
 				</div>
+				<!-- filters toggle -->
+				<div class="column is-12">
+					<b-button native-type="button" type="is-info is-light" icon-pack="fas" icon-left="sliders-h" @click="showFilters = !showFilters">
+						{{ showFilters ? 'Hide filters' : 'More filters' }}
+						<span v-if="activeFilterCount" class="tag is-info is-rounded">{{ activeFilterCount }}</span>
+					</b-button>
+				</div>
+				<div class="column is-12" v-show="showFilters">
+					<div class="columns is-multiline">
 				<!-- cuisine filter -->
 				<b-field class="column is-6">
 					<b-taginput
@@ -164,6 +173,8 @@
 						@typing="setFilteredCategoriesEasyQuick">
 					</b-taginput>
 				</b-field>
+					</div>
+				</div>
 				<div class="column is-12 text-right">
 					<b-button native-type="submit" type="is-primary" size="is-large" :loading="isContentLoading">Search</b-button>
 				</div>
@@ -431,6 +442,7 @@
 						data() {
 							return {
 								page: 1,
+								showFilters: false,
 								// need to redefine these, so they're available in the templates
 								categoryTypeCuisines: CATEGORY_CUISINES,
 								categoryTypeSpecialDiets: CATEGORY_SPECIAL_DIETS,
@@ -467,6 +479,7 @@
 								[CATEGORY_DISH_TYPES]: this.filterCategoryObjectsFromIdsAndType(to.query.categories || [], CATEGORY_DISH_TYPES),
 								[CATEGORY_EASY_QUICK]: this.filterCategoryObjectsFromIdsAndType(to.query.categories || [], CATEGORY_EASY_QUICK),
 							}
+							this.showFilters = !!(to.query.categories);
 							this.search();
 							next();
 						},
@@ -494,10 +507,18 @@
 									[CATEGORY_DISH_TYPES]: this.filterCategoryObjectsFromIdsAndType(this.$route.query.categories || [], CATEGORY_DISH_TYPES),
 									[CATEGORY_EASY_QUICK]: this.filterCategoryObjectsFromIdsAndType(this.$route.query.categories || [], CATEGORY_EASY_QUICK),
 								}
+								this.showFilters = !!(this.$route.query.categories);
 
 								// search
 								this.search();
 							});
+						},
+						computed: {
+							activeFilterCount() {
+								return Object.getOwnPropertyNames(this.categoriesChosen).reduce((total, type) => {
+									return total + this.categoriesChosen[type].length;
+								}, 0);
+							},
 						},
 						methods: {
 							filterCategoryObjectsFromIdsAndType(ids, type) {
