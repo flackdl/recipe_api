@@ -39,8 +39,9 @@ class Category(models.Model):
     TYPE_CUISINES = 'cuisines'
     TYPE_MEAL_TYPES = 'meal_types'
     TYPE_DISH_TYPES = 'dish_types'
+    TYPE_EASY_QUICK = 'easy_quick'
     TYPE_UNKNOWN = '_UNKNOWN_'
-    TYPES = [TYPE_SPECIAL_DIET, TYPE_CUISINES, TYPE_MEAL_TYPES, TYPE_DISH_TYPES, TYPE_UNKNOWN]
+    TYPES = [TYPE_SPECIAL_DIET, TYPE_CUISINES, TYPE_MEAL_TYPES, TYPE_DISH_TYPES, TYPE_EASY_QUICK, TYPE_UNKNOWN]
 
     name = models.CharField(max_length=100, unique=True)
     type = models.CharField(max_length=50, choices=zip(TYPES, TYPES))

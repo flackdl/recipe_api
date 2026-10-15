@@ -10,6 +10,7 @@ from typing import Union, Tuple
 from urllib.parse import urlparse
 import requests
 from django.contrib.postgres.aggregates import StringAgg
+from lxml import etree
 from django.conf import settings
 from django.contrib.postgres.search import SearchVector
 from django.core.management.base import BaseCommand, CommandError
@@ -33,6 +34,16 @@ REQUEST_HEADERS = {
 SITEMAP_LEGACY_RECIPES = 'https://www.nytimes.com/sitemaps/www.nytimes.com/recipes_00000.xml.gz'
 SITEMAP_COOKING_INDEX = 'https://www.nytimes.com/sitemaps/new/cooking.xml.gz'
 
+# NYT recipe-page tag types -> our Category types (see scoopRecipe.tags in __NEXT_DATA__)
+TAG_TYPE_TO_CATEGORY_TYPE = {
+    'CUISINE': Category.TYPE_CUISINES,
+    'MEAL': Category.TYPE_MEAL_TYPES,
+    'COURSE': Category.TYPE_DISH_TYPES,
+    'DISH': Category.TYPE_DISH_TYPES,
+    'DIET': Category.TYPE_SPECIAL_DIET,
+    'INVESTMENT': Category.TYPE_EASY_QUICK,
+}
+
 
 class Command(BaseCommand):
     help = 'Scrape NYT recipes'
@@ -43,13 +54,16 @@ class Command(BaseCommand):
         parser.add_argument('--recipes', action='store_true', help='Scrapes all recipes')
         parser.add_argument('--specific-recipe-slug', help='Scrapes a specific recipe')
         parser.add_argument('--force', action='store_true', help='Forces an update')
+        parser.add_argument('--categories', action='store_true', help='Backfill typed categories for all recipes')
+        parser.add_argument('--clear-unknown-categories', action='store_true', help='Delete all _UNKNOWN_ categories')
 
     def handle(self, *args, **options):
 
         self.force = options['force']
 
         # validate required args
-        if not any([options['urls'], options['recipes'], options['specific_recipe_slug']]):
+        if not any([options['urls'], options['recipes'], options['specific_recipe_slug'],
+                    options['categories'], options['clear_unknown_categories']]):
             raise CommandError('Missing argument.  Run with -h to see options')
 
         self._validate_cache_path()
@@ -60,6 +74,10 @@ class Command(BaseCommand):
             self.scrape_recipes()
         if options['specific_recipe_slug']:
             self.scrape_specific_recipe(options['specific_recipe_slug'])
+        if options['categories']:
+            self.backfill_categories()
+        if options['clear_unknown_categories']:
+            self.clear_unknown_categories()
 
         # clear cache
         cache.clear()
@@ -91,12 +109,60 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS('Complete'))
 
+    def backfill_categories(self):
+        # re-fetch each recipe page and update only its typed categories (no image downloads)
+        recipes = list(Recipe.objects.all())
+        for i, recipe in enumerate(recipes):
+            url = '{base_url}/recipes/{slug}'.format(base_url=URL_NYT, slug=recipe.slug)
+            try:
+                response = requests.get(url, timeout=20, headers=REQUEST_HEADERS)
+                response.raise_for_status()
+            except requests.exceptions.RequestException as e:
+                logging.warning('failed to fetch %s: %s', url, e)
+                continue
+            recipe.categories.set(self._categories_from_tags(response.content))
+            if i != 0 and i % 100 == 0:
+                self.stdout.write(self.style.SUCCESS('Backfilled {} recipes so far'.format(i)))
+        self.stdout.write(self.style.SUCCESS('Completed category backfill for {} recipes'.format(len(recipes))))
+
+    def clear_unknown_categories(self):
+        deleted, _ = Category.objects.filter(type=Category.TYPE_UNKNOWN).delete()
+        self.stdout.write(self.style.SUCCESS('Deleted {} unknown categories'.format(deleted)))
+
     def _get_search_vector(self):
         return (
                 SearchVector('name', weight='A', config=POSTGRES_LANGUAGE_UNACCENT) +
                 SearchVector(StringAgg('categories__name', ' '), weight='B', config=POSTGRES_LANGUAGE_UNACCENT) +
                 SearchVector('ingredients', weight='C', config=POSTGRES_LANGUAGE_UNACCENT)
         )
+
+    def _extract_recipe_tags(self, content):
+        # parse __NEXT_DATA__ -> pageProps.scoopRecipe.tags
+        html = etree.HTML(content)
+        script = html.xpath('//script[@id="__NEXT_DATA__"]')
+        if not script or not script[0].text:
+            return []
+        try:
+            data = json.loads(script[0].text)
+        except (ValueError, TypeError):
+            return []
+        scoop = data.get('props', {}).get('pageProps', {}).get('scoopRecipe') or {}
+        return scoop.get('tags') or []
+
+    def _categories_from_tags(self, content):
+        # map NYT tag types to typed Category rows
+        categories = []
+        for tag in self._extract_recipe_tags(content):
+            category_type = TAG_TYPE_TO_CATEGORY_TYPE.get(tag.get('type'))
+            name = (tag.get('normalizedName') or (tag.get('name') or '').lower()).strip()
+            if not category_type or not name:
+                continue
+            category, _ = Category.objects.update_or_create(
+                name=name,
+                defaults=dict(type=category_type),
+            )
+            categories.append(category)
+        return categories
 
     def _fetch_sitemap(self, url):
         # fetch a sitemap (gzip or plain XML) and return its <loc> urls
@@ -233,21 +299,8 @@ class Command(BaseCommand):
                 author=recipe_data.get('author'),
             ),
         )
-        # set categories/keywords
-        try:
-            keywords = scraper.keywords() or []
-        except Exception:
-            keywords = []
-        categories = []
-        for keyword in keywords:
-            category, _ = Category.objects.update_or_create(
-                name=keyword.lower(),
-                defaults=dict(
-                    type=Category.TYPE_UNKNOWN,
-                ),
-            )
-            categories.append(category)
-        recipe.categories.set(categories)
+        # set typed categories from __NEXT_DATA__ tags
+        recipe.categories.set(self._categories_from_tags(response.content))
 
         return recipe, scraper.image()
 
