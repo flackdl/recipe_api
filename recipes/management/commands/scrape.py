@@ -125,6 +125,14 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.SUCCESS('Backfilled {} recipes so far'.format(i)))
         self.stdout.write(self.style.SUCCESS('Completed category backfill for {} recipes'.format(len(recipes))))
 
+        # rebuild search vectors now that categories have changed
+        vector = self._get_search_vector()
+        self.stdout.write(self.style.SUCCESS('Rebuilding search vectors'))
+        for recipe in Recipe.objects.annotate(vector=vector):
+            recipe.search_vector = recipe.vector
+            recipe.save()
+        self.stdout.write(self.style.SUCCESS('Complete'))
+
     def clear_unknown_categories(self):
         deleted, _ = Category.objects.filter(type=Category.TYPE_UNKNOWN).delete()
         self.stdout.write(self.style.SUCCESS('Deleted {} unknown categories'.format(deleted)))
