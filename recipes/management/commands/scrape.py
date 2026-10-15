@@ -1,4 +1,5 @@
 import errno
+import gzip
 import os
 import re
 import shutil
@@ -9,7 +10,6 @@ from typing import Union, Tuple
 from urllib.parse import urlparse
 import requests
 from django.contrib.postgres.aggregates import StringAgg
-from lxml import etree
 from django.conf import settings
 from django.contrib.postgres.search import SearchVector
 from django.core.management.base import BaseCommand, CommandError
@@ -29,6 +29,9 @@ REQUEST_HEADERS = {
     'Connection': 'keep-alive',
     'Upgrade-Insecure-Requests': '1',
 }
+
+SITEMAP_LEGACY_RECIPES = 'https://www.nytimes.com/sitemaps/www.nytimes.com/recipes_00000.xml.gz'
+SITEMAP_COOKING_INDEX = 'https://www.nytimes.com/sitemaps/new/cooking.xml.gz'
 
 
 class Command(BaseCommand):
@@ -95,86 +98,57 @@ class Command(BaseCommand):
                 SearchVector('ingredients', weight='C', config=POSTGRES_LANGUAGE_UNACCENT)
         )
 
-    def _fetch_url_content(self, url) -> str:
-        response = requests.get(url, timeout=30, headers=REQUEST_HEADERS)
-        return response.content.decode()
+    def _fetch_sitemap(self, url):
+        # fetch a sitemap (gzip or plain XML) and return its <loc> urls
+        try:
+            response = requests.get(url, timeout=30, headers=REQUEST_HEADERS)
+            response.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            logging.warning('failed to fetch sitemap %s: %s', url, e)
+            self.stdout.write(self.style.ERROR('Failed to fetch sitemap {}'.format(url)))
+            return []
+        content = response.content
+        # NYT serves .xml.gz paths as plain XML; sniff the gzip magic bytes
+        if content[:2] == b'\x1f\x8b':
+            content = gzip.decompress(content)
+        text = content.decode('utf-8', 'ignore')
+        return [loc.strip() for loc in re.findall(r'<loc>([^<]+)</loc>', text) if loc.strip()]
 
-    def _fetch_page_props(self, url: str) -> dict:
-        content = self._fetch_url_content(url)
-        return self._parse_page_props(content)
-
-    def _parse_page_props(self, content) -> dict:
-        empty = {}
-        html = etree.HTML(content)
-        script_json = html.xpath('//script[@id="__NEXT_DATA__"]')
-        # return empty if script is absent
-        if not script_json:
-            return empty
-        data = json.loads(script_json[0].text)
-        return data.get('props', empty).get('pageProps', empty)
+    def _slug_from_loc(self, loc):
+        # convert a sitemap <loc> into a cooking slug, or None if not a recipe
+        path = urlparse(loc).path
+        # cooking format: /recipes/<id>-<slug>
+        match = re.search(r'/recipes/(\d+)-([A-Za-z0-9\-]+)$', path)
+        if match:
+            return '{}-{}'.format(match.group(1), match.group(2).lower())
+        # legacy www format: /recipes/<id>/<Slug>.html
+        match = re.search(r'/recipes/(\d+)/([^/]+)\.html$', path)
+        if match:
+            return '{}-{}'.format(match.group(1), match.group(2).lower())
+        return None
 
     def _scrape_urls(self):
-        recipe_urls = set()
-        page = 1
-        identical_page_failures = 0
-        sequential_failures = 0
+        slugs = set()
 
-        while True:
-            page_recipe_urls = set()
-            url = '{url}/search?page={page}'.format(url=URL_NYT, page=page)
-            try:
-                props = self._fetch_page_props(url)
-            except requests.exceptions.RequestException as e:
-                logging.warning(e)
-                # repeat requests a few times for failures
-                self.stdout.write(self.style.WARNING('Bad sequential response #{} for {}'.format(sequential_failures, url)))
-                sequential_failures += 1
-                # too many consecutive errors for this page - go to the next page
-                if sequential_failures > 5:
-                    self.stdout.write(self.style.WARNING('Too many failures for {}, continuing'.format(url)))
-                    page += 1
-                continue
+        # legacy www.nytimes.com recipes (single sitemap)
+        for loc in self._fetch_sitemap(SITEMAP_LEGACY_RECIPES):
+            slug = self._slug_from_loc(loc)
+            if slug:
+                slugs.add(slug)
 
-            sequential_failures = 0
-            results = props.get('results', [])
-            # filter to type: recipe (e.g., not "collection")
-            recipes = [r for r in results if r.get('type') == 'recipe']
+        # newer cooking.nytimes.com recipes (index -> monthly sitemaps)
+        for index_loc in self._fetch_sitemap(SITEMAP_COOKING_INDEX):
+            for loc in self._fetch_sitemap(index_loc):
+                slug = self._slug_from_loc(loc)
+                if slug:
+                    slugs.add(slug)
 
-            self.stdout.write(self.style.SUCCESS('Fetched {} with {} recipes'.format(url, len(recipes))))
-            if recipes:
-                for recipe in recipes:
-                    recipe_url = recipe.get('url')
-                    if not recipe_url:
-                        logging.warning(f'${url} is missing "url" in an article, skipping')
-                    # verify it matches a recipe url pattern
-                    if not re.search('^/recipes/', recipe_url):
-                        continue
-                    page_recipe_urls.add(recipe_url)
-            else:  # no more pages
-                self.stdout.write(self.style.SUCCESS('No recipes found on URl {}'.format(url)))
+        slugs = sorted(slugs)
 
-            # validate urls exist in the page
-            if not page_recipe_urls:
-                logging.warning(f'no recipe urls found for {url}')
-                page += 1
-                continue
-            # validate identical page
-            if page_recipe_urls.issubset(recipe_urls):
-                identical_page_failures += 1
-                self.stdout.write(self.style.WARNING(f'identical page response #{identical_page_failures} for {url}'))
-                if identical_page_failures >= 20:
-                    self.stdout.write(
-                        self.style.SUCCESS(f'Pages have been identical the last {identical_page_failures} times so stopping scrape on page {page}'))
-                    break
-            else:
-                identical_page_failures = 0
-                recipe_urls.update(page_recipe_urls)
-
-            page += 1
-
-        # save output as json file
-        json.dump({'urls': list(recipe_urls)}, open(os.path.join(CACHE_DIR, 'urls.json'), 'w'), indent=2)
-        self.stdout.write(self.style.SUCCESS('Completed {} urls'.format(len(recipe_urls))))
+        # save output as json file (url paths, matching what --recipes expects)
+        json.dump({'urls': ['/recipes/{}'.format(slug) for slug in slugs]},
+                  open(os.path.join(CACHE_DIR, 'urls.json'), 'w'), indent=2)
+        self.stdout.write(self.style.SUCCESS('Completed {} urls'.format(len(slugs))))
 
     def _scrape_recipes(self):
         recipes_scraped = 0
