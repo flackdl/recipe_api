@@ -110,13 +110,16 @@ class Command(BaseCommand):
         return kept, deleted, False
 
     def _resolve_canonical(self, slugs):
+        lower_map = {slug.lower(): slug for slug in slugs}
         for slug in slugs:
             url = f'{URL_NYT}/recipes/{slug}'
             try:
                 response = requests.get(url, timeout=REQUEST_TIMEOUT, headers=REQUEST_HEADERS)
-                final = unquote(os.path.basename(urlparse(response.url).path))
+                final = unquote(os.path.basename(urlparse(response.url).path.rstrip('/')))
                 if final in slugs:
                     return final
+                if final.lower() in lower_map:
+                    return lower_map[final.lower()]
             except requests.RequestException:
                 pass
             time.sleep(self.delay)
