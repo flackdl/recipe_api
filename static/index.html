@@ -618,7 +618,7 @@
 								const url = `/api/recipe/${params}`;
 
 								// fetch recipes
-								return fetch(url).then((response) => {
+								return fetch(url, { cache: 'no-store' }).then((response) => {
 									if (response.ok) {
 										return response.json().then((data) => {
 											this.searchResults = data;
@@ -669,7 +669,7 @@
 							this.isContentLoading = true;
 
 							// fetch recipe
-							fetch(`/api/recipe/?slug=${this.$route.params.slug}`).then((response) => {
+							fetch(`/api/recipe/?slug=${this.$route.params.slug}`, { cache: 'no-store' }).then((response) => {
 								response.json().then((data) => {
 									this.isContentLoading = false;
 									if (data.results.length > 0) {
@@ -736,7 +736,7 @@
 								this.error = null;
 								this.isContentLoading = true;
 								// fetch recipe url
-								fetch(`/api/just-the-recipe/?url=${this.recipeUrl}`).then((response) => {
+								fetch(`/api/just-the-recipe/?url=${this.recipeUrl}`, { cache: 'no-store' }).then((response) => {
 									if (!response.ok) {
 										this.handleError('Could not parse URL');
 										return;
