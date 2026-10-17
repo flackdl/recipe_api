@@ -285,6 +285,10 @@ class Command(BaseCommand):
         # resolve the canonical slug from the final url (old slugs redirect to the current one)
         final_url = response.url
         slug = os.path.basename(urlparse(final_url).path)
+        # reuse an existing row whose slug differs only by case, so we don't create a case-variant duplicate
+        existing = Recipe.objects.filter(slug__iexact=slug).first()
+        if existing:
+            slug = existing.slug
         # parse recipe
         scraper = scrape_html(response.content, org_url=final_url, wild_mode=True)
         recipe_data = scraper.to_json()
