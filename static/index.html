@@ -174,14 +174,14 @@
 					</b-taginput>
 				</b-field>
 				<!-- minimum rating filter -->
-				<b-field class="column is-6" label="Minimum rating">
-					<b-select v-model="minRating" placeholder="Any rating">
-						<option value="">Any rating</option>
-						<option value="1">1+</option>
-						<option value="2">2+</option>
-						<option value="3">3+</option>
-						<option value="4">4+</option>
-						<option value="5">5</option>
+				<b-field class="column is-6">
+					<b-select v-model="minRating" size="is-small" icon-pack="fas" icon="star" expanded>
+						<option value="">any rating...</option>
+						<option value="1">1+ stars</option>
+						<option value="2">2+ stars</option>
+						<option value="3">3+ stars</option>
+						<option value="4">4+ stars</option>
+						<option value="5">5 stars</option>
 					</b-select>
 				</b-field>
 					</div>
