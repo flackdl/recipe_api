@@ -173,6 +173,17 @@
 						@typing="setFilteredCategoriesEasyQuick">
 					</b-taginput>
 				</b-field>
+				<!-- minimum rating filter -->
+				<b-field class="column is-6" label="Minimum rating">
+					<b-select v-model="minRating" placeholder="Any rating">
+						<option value="">Any rating</option>
+						<option value="1">1+</option>
+						<option value="2">2+</option>
+						<option value="3">3+</option>
+						<option value="4">4+</option>
+						<option value="5">5</option>
+					</b-select>
+				</b-field>
 					</div>
 				</div>
 				<div class="column is-12 text-right">
@@ -443,6 +454,7 @@
 							return {
 								page: 1,
 								showFilters: false,
+								minRating: '',
 								// need to redefine these, so they're available in the templates
 								categoryTypeCuisines: CATEGORY_CUISINES,
 								categoryTypeSpecialDiets: CATEGORY_SPECIAL_DIETS,
@@ -479,7 +491,8 @@
 								[CATEGORY_DISH_TYPES]: this.filterCategoryObjectsFromIdsAndType(to.query.categories || [], CATEGORY_DISH_TYPES),
 								[CATEGORY_EASY_QUICK]: this.filterCategoryObjectsFromIdsAndType(to.query.categories || [], CATEGORY_EASY_QUICK),
 							}
-							this.showFilters = !!(to.query.categories);
+							this.showFilters = !!(to.query.categories || to.query.rating_value__gte);
+							this.minRating = to.query.rating_value__gte || '';
 							this.search();
 							next();
 						},
@@ -507,7 +520,8 @@
 									[CATEGORY_DISH_TYPES]: this.filterCategoryObjectsFromIdsAndType(this.$route.query.categories || [], CATEGORY_DISH_TYPES),
 									[CATEGORY_EASY_QUICK]: this.filterCategoryObjectsFromIdsAndType(this.$route.query.categories || [], CATEGORY_EASY_QUICK),
 								}
-								this.showFilters = !!(this.$route.query.categories);
+								this.showFilters = !!(this.$route.query.categories || this.$route.query.rating_value__gte);
+								this.minRating = this.$route.query.rating_value__gte || '';
 
 								// search
 								this.search();
@@ -517,7 +531,7 @@
 							activeFilterCount() {
 								return Object.getOwnPropertyNames(this.categoriesChosen).reduce((total, type) => {
 									return total + this.categoriesChosen[type].length;
-								}, 0);
+								}, 0) + (this.minRating ? 1 : 0);
 							},
 						},
 						methods: {
@@ -625,6 +639,10 @@
 										});
 									}
 								});
+								// add minimum rating filter
+								if (this.minRating) {
+									params.push(`rating_value__gte=${this.minRating}`);
+								}
 								// add page filter
 								params = params.concat([`page=${this.page}`]);
 
