@@ -86,9 +86,9 @@ class Command(BaseCommand):
         recipe, image_url = self._scrape_recipe_url('{base_url}/recipes/{slug}'.format(base_url=URL_NYT, slug=slug.strip()))
         # save search vector
         vector = self._get_search_vector()
-        for recipe in Recipe.objects.filter(slug=slug).annotate(vector=vector):
-            recipe.search_vector = recipe.vector
-            recipe.save()
+        recipe = Recipe.objects.filter(slug=recipe.slug).annotate(vector=vector).first() or recipe
+        recipe.search_vector = vector
+        recipe.save()
         self._scrape_recipe_image(recipe, image_url)
         self.stdout.write(self.style.SUCCESS('Completed scraping {}'.format(recipe)))
 
@@ -282,8 +282,11 @@ class Command(BaseCommand):
 
         # fetch url
         response = requests.get(url, timeout=20, headers=REQUEST_HEADERS)
+        # resolve the canonical slug from the final url (old slugs redirect to the current one)
+        final_url = response.url
+        slug = os.path.basename(urlparse(final_url).path)
         # parse recipe
-        scraper = scrape_html(response.content, org_url=url, wild_mode=True)
+        scraper = scrape_html(response.content, org_url=final_url, wild_mode=True)
         recipe_data = scraper.to_json()
         # validate it has ingredients
         if not recipe_data.get('ingredients'):
@@ -294,7 +297,7 @@ class Command(BaseCommand):
             recipe_data['ingredients'] = self._convert_ingredient_groups(recipe_data)
         # save the recipe
         recipe, _ = Recipe.objects.update_or_create(
-            slug=os.path.basename(url),
+            slug=slug,
             defaults=dict(
                 name=recipe_data.get('title'),
                 description=self._replace_recipe_links_to_internal(recipe_data.get('description') or ''),
